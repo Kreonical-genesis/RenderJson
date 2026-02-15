@@ -1,3 +1,4 @@
 /.venv
 /import/*
-/export/*
+/assets/*
+/temp_pack/*
