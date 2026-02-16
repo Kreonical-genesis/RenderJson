@@ -102,91 +102,196 @@ HTML_CONTENT = """<!DOCTYPE html>
             camera.updateProjectionMatrix();
         }
 
-        function createGeometryFromModel(model, textureUrl) {
-            return new Promise((resolve, reject) => {
-                const group = new THREE.Group();
-                const textureLoader = new THREE.TextureLoader();
-                
-                textureLoader.load(textureUrl, (minecraftTexture) => {
-                    minecraftTexture.magFilter = THREE.NearestFilter;
-                    minecraftTexture.minFilter = THREE.NearestFilter;
-
-                    if (model.elements) {
-                        model.elements.forEach(element => {
-                            const from = element.from;
-                            const to = element.to;
-                            const sizeX = (to[0] - from[0]) / 16;
-                            const sizeY = (to[1] - from[1]) / 16;
-                            const sizeZ = (to[2] - from[2]) / 16;
-
-                            const geometry = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
-                            
-                            if (element.faces) {
-                                const uvs = geometry.attributes.uv.array;
-                                const faceOrder = ['east', 'west', 'up', 'down', 'south', 'north'];
-
-                                faceOrder.forEach((faceName, index) => {
-                                    const face = element.faces[faceName];
-                                    if (face && face.uv) {
-                                        const uv = face.uv;
-                                        const u1 = uv[0] / 16;
-                                        const v1 = 1 - (uv[3] / 16); 
-                                        const u2 = uv[2] / 16;
-                                        const v2 = 1 - (uv[1] / 16);
-                                        
-                                        const offset = index * 8;
-                                        uvs[offset] = u1; uvs[offset + 1] = v2;
-                                        uvs[offset + 2] = u2; uvs[offset + 3] = v2;
-                                        uvs[offset + 4] = u1; uvs[offset + 5] = v1;
-                                        uvs[offset + 6] = u2; uvs[offset + 7] = v1;
-                                    }
-                                });
-                                geometry.attributes.uv.needsUpdate = true;
-                            }
-
-                            const material = new THREE.MeshStandardMaterial({
-                                map: minecraftTexture,
-                                transparent: true,
-                                alphaTest: 0.5,
-                                side: THREE.DoubleSide
-                            });
-
-                            const cube = new THREE.Mesh(geometry, material);
-                            const posX = (from[0] + to[0]) / 32 - 0.5;
-                            const posY = (from[1] + to[1]) / 32 - 0.5;
-                            const posZ = (from[2] + to[2]) / 32 - 0.5;
-                            cube.position.set(posX, posY, posZ);
-
-                            if (element.rotation) {
-                                const origin = element.rotation.origin;
-                                const axis = element.rotation.axis;
-                                const angle = (element.rotation.angle || 0) * (Math.PI / 180);
-                                
-                                const pivotX = origin[0] / 16 - 0.5;
-                                const pivotY = origin[1] / 16 - 0.5;
-                                const pivotZ = origin[2] / 16 - 0.5;
-
-                                const pivotGroup = new THREE.Group();
-                                pivotGroup.position.set(pivotX, pivotY, pivotZ);
-                                group.add(pivotGroup);
-
-                                cube.position.set(posX - pivotX, posY - pivotY, posZ - pivotZ);
-                                pivotGroup.add(cube);
-
-                                if (axis === 'x') pivotGroup.rotation.x = angle;
-                                else if (axis === 'y') pivotGroup.rotation.y = angle;
-                                else if (axis === 'z') pivotGroup.rotation.z = angle;
-                            } else {
-                                group.add(cube);
-                            }
-                        });
-                    }
-                    resolve(group);
-                }, undefined, (err) => reject(err));
-            });
+        function resolveTextureUrl(texturePath) {
+            let namespace = 'minecraft';
+            let path = texturePath;
+            if (texturePath.includes(':')) {
+                const parts = texturePath.split(':');
+                namespace = parts[0];
+                path = parts[1];
+            }
+            return `temp_pack/assets/${namespace}/textures/${path}.png`;
         }
 
-        async function renderItem(modelPath, texturePath) {
+        async function loadModelTextures(model) {
+            const textureMap = {};
+            const loader = new THREE.TextureLoader();
+            
+            if (!model.textures) return {};
+
+            let contextDir = "";
+            let contextNamespace = "minecraft";
+
+            for(let k in model.textures) {
+                const t = model.textures[k];
+                if(t && typeof t === 'string' && !t.startsWith('#') && !t.startsWith('items_displayed:') && t.includes('/')) {
+                     const parts = t.split(':');
+                     if (parts.length > 1) {
+                         contextNamespace = parts[0];
+                         const p = parts[1];
+                         contextDir = p.substring(0, p.lastIndexOf('/')+1);
+                     } else {
+                         contextNamespace = 'minecraft';
+                         const p = parts[0];
+                         contextDir = p.substring(0, p.lastIndexOf('/')+1);
+                     }
+                     break; 
+                }
+            }
+
+            const resolveRef = (key) => {
+                let val = model.textures[key];
+                let attempts = 0;
+                while (val && val.startsWith('#') && attempts < 10) {
+                    val = model.textures[val.substring(1)];
+                    attempts++;
+                }
+                return val;
+            };
+
+            const promises = [];
+            for (let key in model.textures) {
+                const finalPath = resolveRef(key);
+                if (finalPath) {
+                    let url;
+                    if (finalPath.startsWith('items_displayed:')) {
+                        const cleanName = finalPath.split(':')[1];
+                        const fullPath = contextNamespace + ":" + contextDir + cleanName;
+                        url = resolveTextureUrl(fullPath);
+                    } else {
+                        url = resolveTextureUrl(finalPath);
+                    }
+
+                    promises.push(new Promise((resolve) => {
+                        loader.load(url, (tex) => {
+                            tex.magFilter = THREE.NearestFilter;
+                            tex.minFilter = THREE.NearestFilter;
+                            tex.colorSpace = THREE.SRGBColorSpace;
+                            textureMap['#' + key] = tex;
+                            resolve();
+                        }, undefined, () => {
+                            console.warn("Missing texture:", url);
+                            resolve();
+                        });
+                    }));
+                }
+            }
+            await Promise.all(promises);
+            return textureMap;
+        }
+
+        async function createGeometryFromModel(model) {
+            const textureMap = await loadModelTextures(model);
+            const group = new THREE.Group();
+            
+            const transparentMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
+
+            if (model.elements) {
+                model.elements.forEach(element => {
+                    const from = element.from;
+                    const to = element.to;
+                    const sizeX = (to[0] - from[0]) / 16;
+                    const sizeY = (to[1] - from[1]) / 16;
+                    const sizeZ = (to[2] - from[2]) / 16;
+
+                    const geometry = new THREE.BoxGeometry(
+                        Math.max(sizeX, 0.0001), 
+                        Math.max(sizeY, 0.0001), 
+                        Math.max(sizeZ, 0.0001)
+                    );
+                    
+                    const materials = [];
+                    const faceOrder = ['east', 'west', 'up', 'down', 'south', 'north'];
+
+                    if (element.faces) {
+                        const uvs = geometry.attributes.uv.array;
+                        
+                        faceOrder.forEach((faceName, index) => {
+                            const face = element.faces[faceName];
+                            
+                            let assignedMat = transparentMat;
+                            if (face && face.texture) {
+                                const tex = textureMap[face.texture];
+                                if (tex) {
+                                    assignedMat = new THREE.MeshStandardMaterial({
+                                        map: tex,
+                                        transparent: true,
+                                        alphaTest: 0.1,
+                                        side: THREE.DoubleSide
+                                    });
+                                }
+                            }
+                            materials.push(assignedMat);
+
+                            if (face && face.uv) {
+                                const uv = face.uv;
+                                const u1 = uv[0] / 16;
+                                const u2 = uv[2] / 16;
+                                const v1 = 1 - (uv[1] / 16);
+                                const v2 = 1 - (uv[3] / 16);
+                                
+                                const corners = [
+                                    { u: u1, v: v1 },
+                                    { u: u2, v: v1 },
+                                    { u: u1, v: v2 },
+                                    { u: u2, v: v2 }
+                                ];
+
+                                let rotation = face.rotation || 0;
+                                let mapOrder = [0, 1, 2, 3];
+                                if (rotation === 90)  mapOrder = [2, 0, 3, 1];
+                                if (rotation === 180) mapOrder = [3, 2, 1, 0];
+                                if (rotation === 270) mapOrder = [1, 3, 0, 2];
+
+                                const offset = index * 8;
+                                uvs[offset]     = corners[mapOrder[0]].u; uvs[offset + 1] = corners[mapOrder[0]].v;
+                                uvs[offset + 2] = corners[mapOrder[1]].u; uvs[offset + 3] = corners[mapOrder[1]].v;
+                                uvs[offset + 4] = corners[mapOrder[2]].u; uvs[offset + 5] = corners[mapOrder[2]].v;
+                                uvs[offset + 6] = corners[mapOrder[3]].u; uvs[offset + 7] = corners[mapOrder[3]].v;
+                            } else {
+                                const offset = index * 8;
+                                for(let i=0; i<8; i++) uvs[offset+i] = 0;
+                            }
+                        });
+                        geometry.attributes.uv.needsUpdate = true;
+                    } else {
+                        for(let i=0; i<6; i++) materials.push(transparentMat);
+                    }
+
+                    const cube = new THREE.Mesh(geometry, materials);
+                    const posX = (from[0] + to[0]) / 32 - 0.5;
+                    const posY = (from[1] + to[1]) / 32 - 0.5;
+                    const posZ = (from[2] + to[2]) / 32 - 0.5;
+                    cube.position.set(posX, posY, posZ);
+
+                    if (element.rotation) {
+                        const origin = element.rotation.origin;
+                        const axis = element.rotation.axis;
+                        const angle = (element.rotation.angle || 0) * (Math.PI / 180);
+                        
+                        const pivotX = origin[0] / 16 - 0.5;
+                        const pivotY = origin[1] / 16 - 0.5;
+                        const pivotZ = origin[2] / 16 - 0.5;
+
+                        const pivotGroup = new THREE.Group();
+                        pivotGroup.position.set(pivotX, pivotY, pivotZ);
+                        group.add(pivotGroup);
+
+                        cube.position.set(posX - pivotX, posY - pivotY, posZ - pivotZ);
+                        pivotGroup.add(cube);
+
+                        if (axis === 'x') pivotGroup.rotation.x = angle;
+                        else if (axis === 'y') pivotGroup.rotation.y = angle;
+                        else if (axis === 'z') pivotGroup.rotation.z = angle;
+                    } else {
+                        group.add(cube);
+                    }
+                });
+            }
+            return group;
+        }
+
+        async function renderItem(modelPath) {
             let modelData;
             try {
                 const response = await fetch(modelPath);
@@ -201,20 +306,20 @@ HTML_CONTENT = """<!DOCTYPE html>
                 mesh.traverse((c) => { 
                     if(c.isMesh) { 
                         if(c.geometry) c.geometry.dispose(); 
-                        if(c.material) c.material.dispose(); 
+                        if (Array.isArray(c.material)) {
+                            c.material.forEach(m => m.dispose());
+                        } else if(c.material) {
+                            c.material.dispose();
+                        }
                     }
                 });
             }
-            if (!modelData.elements || modelData.elements.length === 0) {
-                throw new Error("Unsupported model type (no elements)");
-            }
-            if (modelData.parent) {
-                log(`[${modelPath}] Skipped (has parent model)`, "skip");
-                return;
+            if (!modelData.elements && modelData.parent) {
+                 throw new Error("Model inherits elements (parent loading not implemented)");
             }
 
             try {
-                mesh = await createGeometryFromModel(modelData, texturePath);
+                mesh = await createGeometryFromModel(modelData);
                 scene.add(mesh);
                 fitCameraToMesh(mesh);
                 renderer.render(scene, camera);
@@ -236,21 +341,6 @@ HTML_CONTENT = """<!DOCTYPE html>
             document.getElementById('bar').style.width = percent + '%';
         };
 
-        function resolveModelPath(item) {
-            const parent = item.parentmodel;
-            if (parent && !parent.includes('minecraft:item/generated') && !parent.includes('minecraft:item/handheld') && !parent.includes('builtin/generated')) {
-                return parent;
-            }
-            return item.customModel;
-        }
-
-        function findTexturePath(modelPath) {
-            return modelPath
-                .replace("models", "textures")
-                .replace(".json", ".png");
-        }
-
-
         async function startBatchProcess() {
             initScene();
             log("Loading items.json...");
@@ -262,7 +352,6 @@ HTML_CONTENT = """<!DOCTYPE html>
                 return;
             }
 
-
             let total = models.length;
             let processed = 0;
 
@@ -270,10 +359,8 @@ HTML_CONTENT = """<!DOCTYPE html>
                 processed++;
                 updateStatus(`Processing ${processed}/${total}`, (processed/total)*100);
 
-                const texturePath = findTexturePath(modelPath);
-
                 try {
-                    const base64Image = await renderItem(modelPath, texturePath);
+                    const base64Image = await renderItem(modelPath);
 
                     await fetch('/upload_image', {
                         method: 'POST',
@@ -409,38 +496,6 @@ def select_render_mode():
         print("Invalid selection. Try again.")
 
 def collect_models():
-    assets_path = os.path.join(TEMP_DIR, "assets")
-
-    if not os.path.exists(assets_path):
-        print("Assets folder not found in resourcepack.")
-        sys.exit(1)
-
-    model_files = []
-
-    for namespace in os.listdir(assets_path):
-        namespace_path = os.path.join(assets_path, namespace)
-
-        if not os.path.isdir(namespace_path):
-            continue
-
-        models_path = os.path.join(namespace_path, "models")
-
-        if not os.path.exists(models_path):
-            continue
-
-        for root, _, files in os.walk(models_path):
-            for file in files:
-                if file.endswith(".json"):
-                    full_path = os.path.join(root, file)
-
-                    relative_path = os.path.relpath(full_path, TEMP_DIR)
-                    web_path = os.path.join(TEMP_DIR, relative_path).replace("\\", "/")
-
-                    model_files.append(web_path)
-
-    print(f"Found {len(model_files)} models across all namespaces.")
-    return model_files
-
     assets_path = os.path.join(TEMP_DIR, "assets")
 
     if not os.path.exists(assets_path):
