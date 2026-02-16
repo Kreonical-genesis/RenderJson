@@ -181,6 +181,41 @@ HTML_CONTENT = """<!DOCTYPE html>
             return textureMap;
         }
 
+        async function loadModelWithParents(modelPath, depth = 0) {
+            if (depth > 10) {
+                throw new Error("Parent recursion limit reached");
+            }
+
+            const response = await fetch(modelPath);
+            if (!response.ok) throw new Error("Model not found: " + modelPath);
+            const model = await response.json();
+
+            if (!model.parent) {
+                return model;
+            }
+
+            let parentPath;
+            const parent = model.parent;
+
+            if (parent.includes(":")) {
+                const [namespace, path] = parent.split(":");
+                parentPath = `temp_pack/assets/${namespace}/models/${path}.json`;
+            } else {
+                parentPath = `temp_pack/assets/minecraft/models/${parent}.json`;
+            }
+
+            const parentModel = await loadModelWithParents(parentPath, depth + 1);
+
+            return {
+                ...parentModel,
+                ...model,
+                textures: {
+                    ...(parentModel.textures || {}),
+                    ...(model.textures || {})
+                }
+            };
+        }
+
         async function createGeometryFromModel(model) {
             const textureMap = await loadModelTextures(model);
             const group = new THREE.Group();
@@ -292,12 +327,40 @@ HTML_CONTENT = """<!DOCTYPE html>
             return group;
         }
 
+        async function createGeneratedItem(model) {
+            const texturePath = model.textures?.layer0;
+            if (!texturePath) throw new Error("No layer0 texture");
+
+            const url = resolveTextureUrl(texturePath);
+            const loader = new THREE.TextureLoader();
+
+            const texture = await new Promise((resolve, reject) => {
+                loader.load(url, tex => {
+                    tex.magFilter = THREE.NearestFilter;
+                    tex.minFilter = THREE.NearestFilter;
+                    tex.colorSpace = THREE.SRGBColorSpace;
+                    resolve(tex);
+                }, undefined, reject);
+            });
+
+            const geometry = new THREE.BoxGeometry(1, 1, 0.0625);
+
+            const material = new THREE.MeshStandardMaterial({
+                map: texture,
+                transparent: true,
+                alphaTest: 0.1,
+                side: THREE.DoubleSide
+            });
+
+            return new THREE.Mesh(geometry, material);
+        }
+
         async function renderItem(modelPath) {
             let modelData;
             try {
                 const response = await fetch(modelPath);
                 if (!response.ok) throw new Error("Model not found");
-                modelData = await response.json();
+                modelData = await loadModelWithParents(modelPath);
             } catch (e) {
                 throw new Error(`Load error: ${e.message}`);
             }
@@ -306,13 +369,26 @@ HTML_CONTENT = """<!DOCTYPE html>
                 scene.remove(mesh);
             }
 
-            if (!modelData.elements && modelData.parent) {
-                throw new Error("Model inherits elements (parent loading not implemented)");
-            }
-
             mesh = await createGeometryFromModel(modelData);
             scene.add(mesh);
             fitCameraToMesh(mesh);
+
+            if (modelData.parent === "item/generated") {
+                mesh = await createGeneratedItem(modelData);
+                scene.add(mesh);
+                fitCameraToMesh(mesh);
+
+                if (RENDER_MODE === "png") {
+                    renderer.render(scene, camera);
+                    return renderer.domElement.toDataURL("image/png");
+                }
+
+                if (RENDER_MODE === "gif") {
+                    return await renderGif();
+                }
+
+                return;
+            }
 
             if (RENDER_MODE === "png") {
                 renderer.render(scene, camera);
