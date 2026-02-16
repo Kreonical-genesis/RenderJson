@@ -57,7 +57,7 @@ HTML_CONTENT = """<!DOCTYPE html>
 
     <script>
         const RENDER_MODE = "__RENDER_MODE__";
-        let scene, camera, renderer, mesh;
+        let scene, camera, renderer, mesh, rotationWrapper;
 
         function initScene() {
             scene = new THREE.Scene();
@@ -235,16 +235,18 @@ HTML_CONTENT = """<!DOCTYPE html>
                         Math.max(sizeY, 0.0001), 
                         Math.max(sizeZ, 0.0001)
                     );
-                    
+
+                    const uvAttr = new THREE.BufferAttribute(new Float32Array(geometry.attributes.uv.array), 2);
+                    geometry.setAttribute('uv', uvAttr);
+                    const uvs = uvAttr.array; // теперь изменять безопасно
+
                     const materials = [];
                     const faceOrder = ['east', 'west', 'up', 'down', 'south', 'north'];
 
                     if (element.faces) {
-                        const uvs = geometry.attributes.uv.array;
-                        
                         faceOrder.forEach((faceName, index) => {
                             const face = element.faces[faceName];
-                            
+
                             let assignedMat = transparentMat;
                             if (face && face.texture) {
                                 const tex = textureMap[face.texture];
@@ -253,7 +255,10 @@ HTML_CONTENT = """<!DOCTYPE html>
                                         map: tex,
                                         transparent: true,
                                         alphaTest: 0.1,
-                                        side: THREE.DoubleSide
+                                        side: THREE.FrontSide,
+                                        polygonOffset: true,
+                                        polygonOffsetFactor: -1,
+                                        polygonOffsetUnits: -1
                                     });
                                 }
                             }
@@ -265,7 +270,7 @@ HTML_CONTENT = """<!DOCTYPE html>
                                 const u2 = uv[2] / 16;
                                 const v1 = 1 - (uv[1] / 16);
                                 const v2 = 1 - (uv[3] / 16);
-                                
+
                                 const corners = [
                                     { u: u1, v: v1 },
                                     { u: u2, v: v1 },
@@ -294,10 +299,11 @@ HTML_CONTENT = """<!DOCTYPE html>
                         for(let i=0; i<6; i++) materials.push(transparentMat);
                     }
 
+
                     const cube = new THREE.Mesh(geometry, materials);
-                    const posX = (from[0] + to[0]) / 32 - 0.5;
-                    const posY = (from[1] + to[1]) / 32 - 0.5;
-                    const posZ = (from[2] + to[2]) / 32 - 0.5;
+                    const posX = ((from[0] + to[0]) / 2) / 16 - 0.5;
+                    const posY = ((from[1] + to[1]) / 2) / 16 - 0.5;
+                    const posZ = ((from[2] + to[2]) / 2) / 16 - 0.5;
                     cube.position.set(posX, posY, posZ);
 
                     if (element.rotation) {
@@ -349,7 +355,7 @@ HTML_CONTENT = """<!DOCTYPE html>
                 map: texture,
                 transparent: true,
                 alphaTest: 0.1,
-                side: THREE.DoubleSide
+                side: THREE.FrontSide
             });
 
             return new THREE.Mesh(geometry, material);
@@ -358,8 +364,6 @@ HTML_CONTENT = """<!DOCTYPE html>
         async function renderItem(modelPath) {
             let modelData;
             try {
-                const response = await fetch(modelPath);
-                if (!response.ok) throw new Error("Model not found");
                 modelData = await loadModelWithParents(modelPath);
             } catch (e) {
                 throw new Error(`Load error: ${e.message}`);
@@ -367,27 +371,43 @@ HTML_CONTENT = """<!DOCTYPE html>
 
             if (mesh) {
                 scene.remove(mesh);
+                mesh.traverse(obj => {
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) {
+                        if (Array.isArray(obj.material)) {
+                            obj.material.forEach(m => m.dispose());
+                        } else {
+                            obj.material.dispose();
+                        }
+                    }
+                });
+                mesh = null;              // <- добавляем
             }
 
-            mesh = await createGeometryFromModel(modelData);
-            scene.add(mesh);
-            fitCameraToMesh(mesh);
+            if (rotationWrapper) {
+                scene.remove(rotationWrapper);
+                rotationWrapper = null;   // <- добавляем
+            }
+
+
+            if (rotationWrapper) {
+                scene.remove(rotationWrapper);
+            }
 
             if (modelData.parent === "item/generated") {
                 mesh = await createGeneratedItem(modelData);
-                scene.add(mesh);
+                rotationWrapper = new THREE.Group();
+                rotationWrapper.add(mesh);
+                scene.add(rotationWrapper);
                 fitCameraToMesh(mesh);
 
-                if (RENDER_MODE === "png") {
-                    renderer.render(scene, camera);
-                    return renderer.domElement.toDataURL("image/png");
-                }
+            } else {
 
-                if (RENDER_MODE === "gif") {
-                    return await renderGif();
-                }
-
-                return;
+                mesh = await createGeometryFromModel(modelData);
+                rotationWrapper = new THREE.Group();
+                rotationWrapper.add(mesh);
+                scene.add(rotationWrapper);
+                fitCameraToMesh(mesh);
             }
 
             if (RENDER_MODE === "png") {
@@ -419,8 +439,7 @@ HTML_CONTENT = """<!DOCTYPE html>
 
                 function captureFrame() {
                     const angle = (currentFrame / frames) * fullRotation;
-                    mesh.rotation.y = angle;
-
+                    rotationWrapper.rotation.y = angle;
                     renderer.render(scene, camera);
                     gif.addFrame(renderer.domElement, { copy: true, delay: 40 });
 

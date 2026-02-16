@@ -238,7 +238,7 @@
             if (serpentine) direction = direction * -1;
             for (
               var x = direction == 1 ? 0 : width - 1,
-                xend = direction == 1 ? width : 0;
+              xend = direction == 1 ? width : 0;
               x !== xend;
               x += direction
             ) {
@@ -259,7 +259,7 @@
               var eb = b1 - b2;
               for (
                 var i = direction == 1 ? 0 : ds.length - 1,
-                  end = direction == 1 ? ds.length : 0;
+                end = direction == 1 ? ds.length : 0;
                 i !== end;
                 i += direction
               ) {
