@@ -25,6 +25,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <meta charset="UTF-8">
     <title>Auto Renderer Tool</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
     <style>
         body { 
             background: #222; 
@@ -303,30 +304,69 @@ HTML_CONTENT = """<!DOCTYPE html>
 
             if (mesh) {
                 scene.remove(mesh);
-                mesh.traverse((c) => { 
-                    if(c.isMesh) { 
-                        if(c.geometry) c.geometry.dispose(); 
-                        if (Array.isArray(c.material)) {
-                            c.material.forEach(m => m.dispose());
-                        } else if(c.material) {
-                            c.material.dispose();
-                        }
-                    }
-                });
-            }
-            if (!modelData.elements && modelData.parent) {
-                 throw new Error("Model inherits elements (parent loading not implemented)");
             }
 
-            try {
-                mesh = await createGeometryFromModel(modelData);
-                scene.add(mesh);
-                fitCameraToMesh(mesh);
-                renderer.render(scene, camera);
-                return renderer.domElement.toDataURL('image/png');
-            } catch (e) {
-                throw new Error(`Three.js error: ${e.message}`);
+            if (!modelData.elements && modelData.parent) {
+                throw new Error("Model inherits elements (parent loading not implemented)");
             }
+
+            mesh = await createGeometryFromModel(modelData);
+            scene.add(mesh);
+            fitCameraToMesh(mesh);
+
+            if (RENDER_MODE === "png") {
+                renderer.render(scene, camera);
+                return renderer.domElement.toDataURL("image/png");
+            }
+
+            if (RENDER_MODE === "gif") {
+                return await renderGif();
+            }
+        }
+
+        async function renderGif() {
+            mesh.rotation.set(0, 0, 0);
+            return new Promise((resolve) => {
+
+                const gif = new GIF({
+                    workers: 2,
+                    quality: 10,
+                    width: 500,
+                    height: 500,
+                    workerScript: "gif.worker.js"
+                });
+
+                const frames = 60; // плавность
+                const fullRotation = Math.PI * 2;
+
+                let currentFrame = 0;
+
+                function captureFrame() {
+                    const angle = (currentFrame / frames) * fullRotation;
+                    mesh.rotation.y = angle;
+
+                    renderer.render(scene, camera);
+                    gif.addFrame(renderer.domElement, { copy: true, delay: 40 });
+
+                    currentFrame++;
+
+                    if (currentFrame < frames) {
+                        requestAnimationFrame(captureFrame);
+                    } else {
+                        gif.on("finished", function(blob) {
+                            const reader = new FileReader();
+                            reader.onload = function() {
+                                resolve(reader.result);
+                            };
+                            reader.readAsDataURL(blob);
+                        });
+
+                        gif.render();
+                    }
+                }
+
+                captureFrame();
+            });
         }
 
         const log = (msg, type='normal') => {
@@ -390,11 +430,6 @@ HTML_CONTENT = """<!DOCTYPE html>
 
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
-
-html_with_mode = HTML_CONTENT.replace("__RENDER_MODE__", RENDER_MODE)
-
-with open(RENDER_PAGE, 'w', encoding='utf-8') as f:
-    f.write(html_with_mode)
 
 class RenderRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
@@ -548,6 +583,10 @@ if __name__ == "__main__":
     RENDER_MODE = select_render_mode()
     extract_resourcepack(selected_zip)
     models = collect_models()
+
+    html_with_mode = HTML_CONTENT.replace("__RENDER_MODE__", RENDER_MODE)
+    with open(RENDER_PAGE, 'w', encoding='utf-8') as f:
+        f.write(html_with_mode)
 
     with open(MODELS_LIST_FILE, "w", encoding="utf-8") as f:
         json.dump(models, f, indent=2)
