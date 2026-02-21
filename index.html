@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RenderJson</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+    <style>
+        :root {
+            --bg-base: #0f1115;
+            --bg-panel: #1a1c23;
+            --bg-input: #272a35;
+            --border-color: #2e323f;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --text-main: #f3f4f6;
+            --text-dim: #9ca3af;
+            --success: #10b981;
+            --error: #ef4444;
+            --radius: 12px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            background: var(--bg-base); 
+            color: var(--text-main); 
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-panel); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+        input, select, button { font-family: inherit; }
+        
+        button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        button:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
+        button:disabled { background: #374151; color: #9ca3af; cursor: not-allowed; transform: none; }
+        
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 10px 12px;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus { border-color: var(--accent); }
+
+        #setup-view {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            overflow-y: auto;
+        }
+
+        .setup-header { text-align: center; margin-bottom: 30px; }
+        .setup-header h1 { font-size: 2.5rem; font-weight: 800; background: linear-gradient(135deg, #818cf8, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .setup-header p { color: var(--text-dim); margin-top: 8px; }
+
+        .setup-grid {
+            display: grid;
+            grid-template-columns: 350px 450px;
+            gap: 24px;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .card {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .card h2 { font-size: 1.1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;}
+        .card h2 span { background: var(--accent); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; }
+
+        .form-group { display: flex; flex-direction: column; gap: 8px; }
+        .form-group label { font-size: 0.9rem; color: var(--text-dim); font-weight: 500; }
+        .form-row { display: flex; gap: 12px; }
+        .form-row .form-group { flex: 1; }
+
+        .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .list-header span { font-size: 0.85rem; color: var(--text-dim); }
+        .list-actions button { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); padding: 4px 8px; font-size: 0.8rem; }
+        .list-actions button:hover { background: var(--bg-input); }
+        
+        .model-list-container {
+            flex: 1;
+            min-height: 250px;
+            max-height: 350px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .model-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .model-item:hover { background: rgba(255,255,255,0.05); }
+        .model-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+        .model-item span { font-size: 0.85rem; word-break: break-all; }
+
+        .disabled-panel { opacity: 0.5; pointer-events: none; }
+
+        .start-render-wrapper { grid-column: 1 / -1; display: flex; justify-content: flex-end; margin-top: 10px;}
+        .start-render-wrapper button { padding: 14px 32px; font-size: 1.1rem; background: var(--success); }
+        .start-render-wrapper button:hover:not(:disabled) { background: #059669; }
+
+        #app-view {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            height: 60px;
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            justify-content: space-between;
+            flex-shrink: 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 20;
+        }
+        
+        .brand-area { display: flex; align-items: center; gap: 15px; }
+        .header-title { font-weight: 700; color: #fff; font-size: 1.2em; letter-spacing: 0.5px; }
+
+        .mode-badge {
+            font-size: 0.75rem;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .mode-badge.gif { background-color: #d97706; }
+        .mode-badge.png { background-color: var(--accent); }
+        
+        #status-area {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            margin-left: 40px;
+            gap: 20px;
+            justify-content: flex-end; 
+        }
+
+        .status-info { display: flex; flex-direction: column; align-items: flex-end; min-width: 120px; }
+        #status-text { white-space: nowrap; font-size: 0.95rem; font-weight: 600; color: #eee; }
+        #eta-text { font-size: 0.8rem; color: var(--text-dim); margin-top: 2px; font-family: 'Consolas', monospace; }
+
+        #progress-track {
+            flex: 0 1 400px; 
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background: var(--success);
+            transition: width 0.3s ease-out;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+        }
+
+        main { display: flex; flex: 1; overflow: hidden; position: relative; }
+
+        #render-section {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+            position: relative;
+            overflow: hidden; 
+            padding: 20px;
+        }
+        
+        #canvas-wrapper {
+            background-image: linear-gradient(45deg, #111 25%, transparent 25%), linear-gradient(-45deg, #111 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #111 75%), linear-gradient(-45deg, transparent 75%, #111 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            display: flex; 
+        }
+        
+        #canvas-container canvas {
+            display: block;
+            max-width: 100%; 
+            max-height: 80vh; 
+            height: auto !important; 
+            width: auto !important;
+        }
+
+        #log-section {
+            width: 380px;
+            background: var(--bg-panel);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+        
+        .panel-header {
+            padding: 12px 15px;
+            background: rgba(0,0,0,0.2);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+        }
+
+        #log-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+        }
+        
+        .log-entry { 
+            margin-bottom: 6px; 
+            word-break: break-all; 
+            line-height: 1.4;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            padding-bottom: 4px;
+        }
+        .log-entry span.time { color: var(--text-dim); font-size: 0.9em; margin-right: 8px; }
+        .log-entry.success { color: var(--success); } 
+        .log-entry.error { color: var(--error); }
+        .log-entry.normal { color: #d1d5db; }
+
+        @media (max-width: 900px) {
+            .setup-grid { grid-template-columns: 1fr; }
+            main { flex-direction: column; }
+            #render-section { min-height: 40vh; flex: 1; }
+            #log-section { width: 100%; height: 40vh; border-left: none; border-top: 1px solid var(--border-color); }
+        }
+    </style>
+</head>
+<body>
+    <div id="setup-view">
+        <div class="setup-header">
+            <h1>RenderJson</h1>
+            <p>By kreo_gen & mrlemonhog</p>
+        </div>
+
+        <div class="setup-grid">
+            <div style="display: flex; flex-direction: column; gap: 24px;">
+                <div class="card">
+                    <h2><span>1</span>Ресурспак</h2>
+                    <div class="form-group">
+                        <label>Выберите .zip архив из папки /import</label>
+                        <select id="pack-select">
+                            <option value="">Загрузка...</option>
+                        </select>
+                    </div>
+                    <button id="btn-extract" onclick="extractPack()">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        Распаковать архив
+                    </button>
+                </div>
+
+                <div class="card disabled-panel" id="settings-card">
+                    <h2><span>2</span> Настройки рендера</h2>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Режим</label>
+                            <select id="setting-mode">
+                                <option value="png">PNG</option>
+                                <option value="gif">GIF</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Разрешение (px)</label>
+                            <input type="number" id="setting-size" value="800" min="100" max="2048">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card disabled-panel" id="models-card" style="display: flex; flex-direction: column;">
+                <h2><span>3</span> Выбор моделей</h2>
+                <div class="form-group">
+                    <input type="text" id="model-search" placeholder="Поиск по названию или пути..." oninput="filterModels()">
+                </div>
+                
+                <div class="list-header">
+                    <span id="models-count-text">Выбрано: 0 / 0</span>
+                    <div class="list-actions">
+                        <button onclick="toggleAllModels(true)">Все</button>
+                        <button onclick="toggleAllModels(false)">Сброс</button>
+                    </div>
+                </div>
+
+                <div class="model-list-container" id="model-list">
+                </div>
+            </div>
+
+            <div class="start-render-wrapper">
+                <button id="btn-start" class="disabled-panel" onclick="startRenderProcess()">
+                    Начать Рендер
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-view">
+        <header>
+            <div class="brand-area">
+                <div class="header-title">RenderJson</div>
+                <div id="mode-badge" class="mode-badge">загрузка</div>
+            </div>
+            <div id="status-area">
+                <div class="status-info">
+                    <div id="status-text">Инициализация...</div>
+                    <div id="eta-text">Ожидание запуска...</div>
+                </div>
+                <div id="progress-track"><div id="progress-bar"></div></div>
+            </div>
+        </header>
+
+        <main>
+            <section id="render-section">
+                <div id="canvas-wrapper">
+                    <div id="canvas-container"></div>
+                </div>
+            </section>
+            
+            <section id="log-section">
+                <div class="panel-header">Логи</div>
+                <div id="log-container"></div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        let availableModels = [];
+        let selectedModels = new Set();
+        
+        let RENDER_MODE = "png";
+        let CANVAS_SIZE = 800; 
+        let modelsToRender = [];
+
+        let scene, camera, renderer, mesh, rotationWrapper;
+
+        window.onload = async () => {
+            try {
+                const res = await fetch('/api/packs');
+                const data = await res.json();
+                const select = document.getElementById('pack-select');
+                select.innerHTML = '';
+                
+                if (data.packs.length === 0) {
+                    select.innerHTML = '<option disabled selected>Папка /import пуста</option>';
+                    document.getElementById('btn-extract').disabled = true;
+                } else {
+                    data.packs.forEach(p => {
+                        select.innerHTML += `<option value="${p}">${p}</option>`;
+                    });
+                }
+            } catch (e) {
+                alert("Ошибка связи с сервером. Проверьте консоль.");
+            }
+        };
+
+        async function extractPack() {
+            const pack = document.getElementById('pack-select').value;
+            if (!pack) return;
+
+            const btn = document.getElementById('btn-extract');
+            btn.innerHTML = '<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Распаковка...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/extract', {
+                    method: 'POST',
+                    body: JSON.stringify({ pack })
+                });
+                const data = await res.json();
+                
+                availableModels = data.models || [];
+                selectedModels = new Set(availableModels);
+                
+                renderModelList();
+                
+                btn.innerHTML = '✔ Загружено';
+                document.getElementById('settings-card').classList.remove('disabled-panel');
+                document.getElementById('models-card').classList.remove('disabled-panel');
+                document.getElementById('btn-start').classList.remove('disabled-panel');
+
+            } catch(e) {
+                alert("Ошибка при распаковке архива.");
+                btn.innerHTML = 'Ошибка';
+                btn.disabled = false;
+            }
+        }
+
+        function filterModels() {
+            const query = document.getElementById('model-search').value.toLowerCase();
+            renderModelList(query);
+        }
+
+        function toggleAllModels(state) {
+            const query = document.getElementById('model-search').value.toLowerCase();
+            const visibleModels = availableModels.filter(m => m.toLowerCase().includes(query));
+            
+            if (state) {
+                visibleModels.forEach(m => selectedModels.add(m));
+            } else {
+                visibleModels.forEach(m => selectedModels.delete(m));
+            }
+            renderModelList(query);
+        }
+
+        function updateSelectedCount() {
+            document.getElementById('models-count-text').textContent = `Выбрано: ${selectedModels.size} / ${availableModels.length}`;
+            const btnStart = document.getElementById('btn-start');
+            if(selectedModels.size === 0) {
+                btnStart.disabled = true;
+                btnStart.textContent = "Выберите модели";
+            } else {
+                btnStart.disabled = false;
+                btnStart.innerHTML = `Начать Рендер (${selectedModels.size})`;
+            }
+        }
+
+        function renderModelList(filter = "") {
+            const list = document.getElementById('model-list');
+            list.innerHTML = '';
+            
+            const frag = document.createDocumentFragment();
+            const filtered = filter ? availableModels.filter(m => m.toLowerCase().includes(filter)) : availableModels;
+
+            filtered.forEach(m => {
+                const label = document.createElement('label');
+                label.className = 'model-item';
+                
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = m;
+                cb.checked = selectedModels.has(m);
+                cb.onchange = (e) => {
+                    if (e.target.checked) selectedModels.add(m);
+                    else selectedModels.delete(m);
+                    updateSelectedCount();
+                };
+
+                const span = document.createElement('span');
+                span.textContent = m.replace('temp_pack/assets/', '');
+
+                label.appendChild(cb);
+                label.appendChild(span);
+                frag.appendChild(label);
+            });
+            
+            list.appendChild(frag);
+            updateSelectedCount();
+        }
+
+        function startRenderProcess() {
+            RENDER_MODE = document.getElementById('setting-mode').value;
+            CANVAS_SIZE = parseInt(document.getElementById('setting-size').value) || 800;
+            modelsToRender = Array.from(selectedModels);
+
+            document.getElementById('setup-view').style.display = 'none';
+            document.getElementById('app-view').style.display = 'flex';
+
+            const badge = document.getElementById('mode-badge');
+            if (RENDER_MODE === 'gif') {
+                badge.textContent = 'GIF MODE';
+                badge.className = 'mode-badge gif';
+            } else {
+                badge.textContent = 'IMG MODE';
+                badge.className = 'mode-badge png';
+            }
+
+            setTimeout(startBatchProcess, 100);
+        }
+
+        function initScene() {
+            scene = new THREE.Scene();
+            camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
+            
+            const distance = 50;
+            const angleY = 225 * Math.PI / 180;
+            const angleX = 30 * Math.PI / 180;
+            
+            camera.position.set(
+                distance * Math.sin(angleY) * Math.cos(angleX),
+                distance * Math.sin(angleX),
+                distance * Math.cos(angleY)
+            );
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true, 
+                alpha: true, 
+                preserveDrawingBuffer: true,
+                logarithmicDepthBuffer: true
+            });
+            renderer.setSize(CANVAS_SIZE, CANVAS_SIZE);
+            renderer.setClearColor(0x000000, 0);
+            renderer.sortObjects = true;
+            
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+            const topLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            topLight.position.set(5, 20, 5);
+            scene.add(topLight);
+        }
+
+        function fitCameraToMesh(targetMesh) {
+            const box = new THREE.Box3().setFromObject(targetMesh);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+
+            if (rotationWrapper) {
+                rotationWrapper.position.set(-center.x, -center.y, -center.z);
+            } else {
+                targetMesh.position.x -= center.x;
+                targetMesh.position.y -= center.y;
+                targetMesh.position.z -= center.z;
+            }
+
+            const maxDim = Math.max(size.x, size.y, size.z);
+            camera.zoom = (2 / (maxDim || 1)) * 0.8; 
+            camera.updateProjectionMatrix();
+        }
+
+        function resolveTextureUrl(texturePath) {
+            let namespace = 'minecraft';
+            let path = texturePath;
+            if (texturePath.includes(':')) {
+                const parts = texturePath.split(':');
+                namespace = parts[0];
+                path = parts[1];
+            }
+            return `temp_pack/assets/${namespace}/textures/${path}.png`;
+        }
+
+        async function loadModelTextures(model) {
+            const textureMap = {};
+            const loader = new THREE.TextureLoader();
+            
+            if (!model.textures) return {};
+
+            let contextDir = "";
+            let contextNamespace = "minecraft";
+
+            for(let k in model.textures) {
+                const t = model.textures[k];
+                if(t && typeof t === 'string' && !t.startsWith('#') && !t.startsWith('items_displayed:') && t.includes('/')) {
+                     const parts = t.split(':');
+                     if (parts.length > 1) {
+                         contextNamespace = parts[0];
+                         const p = parts[1];
+                         contextDir = p.substring(0, p.lastIndexOf('/')+1);
+                     } else {
+                         contextNamespace = 'minecraft';
+                         const p = parts[0];
+                         contextDir = p.substring(0, p.lastIndexOf('/')+1);
+                     }
+                     break; 
+                }
+            }
+
+            const resolveRef = (key) => {
+                let val = model.textures[key];
+                let attempts = 0;
+                while (val && val.startsWith('#') && attempts < 10) {
+                    val = model.textures[val.substring(1)];
+                    attempts++;
+                }
+                return val;
+            };
+
+            const promises = [];
+            for (let key in model.textures) {
+                const finalPath = resolveRef(key);
+                if (finalPath) {
+                    let url;
+                    if (finalPath.startsWith('items_displayed:')) {
+                        const cleanName = finalPath.split(':')[1];
+                        const fullPath = contextNamespace + ":" + contextDir + cleanName;
+                        url = resolveTextureUrl(fullPath);
+                    } else {
+                        url = resolveTextureUrl(finalPath);
+                    }
+
+                    promises.push(new Promise((resolve) => {
+                        loader.load(url, (tex) => {
+                            tex.magFilter = THREE.NearestFilter;
+                            tex.minFilter = THREE.NearestFilter;
+                            tex.colorSpace = THREE.SRGBColorSpace;
+                            textureMap['#' + key] = tex;
+                            resolve();
+                        }, undefined, () => {
+                            resolve();
+                        });
+                    }));
+                }
+            }
+            await Promise.all(promises);
+            return textureMap;
+        }
+
+        async function loadModelWithParents(modelPath, depth = 0) {
+            if (depth > 10) throw new Error("limit reached");
+
+            const response = await fetch(modelPath);
+            if (!response.ok) throw new Error("Model not found");
+            const model = await response.json();
+
+            if (!model.parent) return model;
+
+            let parentPath;
+            const parent = model.parent;
+
+            if (parent.includes(":")) {
+                const [namespace, path] = parent.split(":");
+                parentPath = `temp_pack/assets/${namespace}/models/${path}.json`;
+            } else {
+                parentPath = `temp_pack/assets/minecraft/models/${parent}.json`;
+            }
+
+            const parentModel = await loadModelWithParents(parentPath, depth + 1);
+
+            return {
+                ...parentModel,
+                ...model,
+                textures: {
+                    ...(parentModel.textures || {}),
+                    ...(model.textures || {})
+                }
+            };
+        }
+
+        async function createGeometryFromModel(model) {
+            const textureMap = await loadModelTextures(model);
+            const group = new THREE.Group();
+            const transparentMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, depthTest: false });
+
+            const EPS = 0.002;
+            let renderOrderCounter = 0;
+            const processedSignatures = new Set();
+
+            if (model.elements) {
+                model.elements.forEach(element => {
+                    const rawFrom = element.from;
+                    const rawTo   = element.to;
+
+                    const mirrorX = rawFrom[0] > rawTo[0];
+                    const mirrorY = rawFrom[1] > rawTo[1];
+                    const mirrorZ = rawFrom[2] > rawTo[2];
+
+                    const from = [
+                        Math.min(rawFrom[0], rawTo[0]),
+                        Math.min(rawFrom[1], rawTo[1]),
+                        Math.min(rawFrom[2], rawTo[2])
+                    ];
+                    const to = [
+                        Math.max(rawFrom[0], rawTo[0]),
+                        Math.max(rawFrom[1], rawTo[1]),
+                        Math.max(rawFrom[2], rawTo[2])
+                    ];
+
+                    const faceSig = element.faces ? JSON.stringify(element.faces) : '';
+                    const sig = `${from.join(',')}|${to.join(',')}|${mirrorX}${mirrorY}${mirrorZ}|${faceSig}`;
+                    if (processedSignatures.has(sig)) return; 
+                    processedSignatures.add(sig);
+
+                    const sizeX = (to[0] - from[0]) / 16;
+                    const sizeY = (to[1] - from[1]) / 16;
+                    const sizeZ = (to[2] - from[2]) / 16;
+
+                    const geometry = new THREE.BoxGeometry(
+                        Math.max(sizeX, 0.0001) + EPS, 
+                        Math.max(sizeY, 0.0001) + EPS, 
+                        Math.max(sizeZ, 0.0001) + EPS
+                    );
+
+                    const uvAttr = new THREE.BufferAttribute(new Float32Array(geometry.attributes.uv.array), 2);
+                    geometry.setAttribute('uv', uvAttr);
+                    const uvs = uvAttr.array;
+
+                    const materials = [];
+                    const faceOrder = ['east', 'west', 'up', 'down', 'south', 'north'];
+
+                    if (element.faces) {
+                        faceOrder.forEach((faceName, index) => {
+                            const face = element.faces[faceName];
+                            let assignedMat = transparentMat;
+                            
+                            if (face && face.texture) {
+                                const tex = textureMap[face.texture];
+                                if (tex) {
+                                    assignedMat = new THREE.MeshStandardMaterial({
+                                        map: tex,
+                                        transparent: true,
+                                        alphaTest: 0.05,
+                                        side: THREE.DoubleSide,
+                                        depthWrite: true,
+                                        depthTest: true,
+                                        polygonOffset: true,
+                                        polygonOffsetFactor: -renderOrderCounter * 0.1,
+                                        polygonOffsetUnits: -1,
+                                    });
+                                }
+                            }
+                            materials.push(assignedMat);
+
+                            if (face && face.uv) {
+                                const uv = face.uv;
+                                let u1 = uv[0] / 16;
+                                let u2 = uv[2] / 16;
+                                let v1 = 1 - (uv[1] / 16);
+                                let v2 = 1 - (uv[3] / 16);
+
+                                let flipU = false;
+                                let flipV = false;
+                                if (faceName === 'east' || faceName === 'west') {
+                                    if (mirrorZ) flipU = !flipU;
+                                    if (mirrorY) flipV = !flipV;
+                                    if (mirrorX) { flipU = !flipU; flipV = !flipV; } 
+                                } else if (faceName === 'up' || faceName === 'down') {
+                                    if (mirrorX) flipU = !flipU;
+                                    if (mirrorZ) flipV = !flipV;
+                                } else if (faceName === 'south' || faceName === 'north') {
+                                    if (mirrorX) flipU = !flipU;
+                                    if (mirrorY) flipV = !flipV;
+                                    if (mirrorZ) { flipU = !flipU; flipV = !flipV; }
+                                }
+
+                                if (flipU) { const tmp = u1; u1 = u2; u2 = tmp; }
+                                if (flipV) { const tmp = v1; v1 = v2; v2 = tmp; }
+
+                                const corners = [{ u: u1, v: v1 }, { u: u2, v: v1 }, { u: u1, v: v2 }, { u: u2, v: v2 }];
+
+                                let rotation = face.rotation || 0;
+                                let mapOrder = [0, 1, 2, 3];
+                                if (rotation === 90)  mapOrder = [2, 0, 3, 1];
+                                if (rotation === 180) mapOrder = [3, 2, 1, 0];
+                                if (rotation === 270) mapOrder = [1, 3, 0, 2];
+
+                                const offset = index * 8;
+                                uvs[offset] = corners[mapOrder[0]].u; uvs[offset + 1] = corners[mapOrder[0]].v;
+                                uvs[offset + 2] = corners[mapOrder[1]].u; uvs[offset + 3] = corners[mapOrder[1]].v;
+                                uvs[offset + 4] = corners[mapOrder[2]].u; uvs[offset + 5] = corners[mapOrder[2]].v;
+                                uvs[offset + 6] = corners[mapOrder[3]].u; uvs[offset + 7] = corners[mapOrder[3]].v;
+                            } else {
+                                const offset = index * 8;
+                                for(let i=0; i<8; i++) uvs[offset+i] = 0;
+                            }
+                        });
+                        geometry.attributes.uv.needsUpdate = true;
+                    } else {
+                        for(let i=0; i<6; i++) materials.push(transparentMat);
+                    }
+
+                    const cube = new THREE.Mesh(geometry, materials);
+                    cube.renderOrder = renderOrderCounter++;
+                    const posX = ((from[0] + to[0]) / 2) / 16 - 0.5;
+                    const posY = ((from[1] + to[1]) / 2) / 16 - 0.5;
+                    const posZ = ((from[2] + to[2]) / 2) / 16 - 0.5;
+                    cube.position.set(posX, posY, posZ);
+
+                    if (element.rotation) {
+                        const origin = element.rotation.origin;
+                        const axis = element.rotation.axis;
+                        const angle = (element.rotation.angle || 0) * (Math.PI / 180);
+                        
+                        const pivotX = origin[0] / 16 - 0.5;
+                        const pivotY = origin[1] / 16 - 0.5;
+                        const pivotZ = origin[2] / 16 - 0.5;
+
+                        const pivotGroup = new THREE.Group();
+                        pivotGroup.position.set(pivotX, pivotY, pivotZ);
+                        group.add(pivotGroup);
+
+                        cube.position.set(posX - pivotX, posY - pivotY, posZ - pivotZ);
+                        pivotGroup.add(cube);
+
+                        if (axis === 'x') pivotGroup.rotation.x = angle;
+                        else if (axis === 'y') pivotGroup.rotation.y = angle;
+                        else if (axis === 'z') pivotGroup.rotation.z = angle;
+                    } else {
+                        group.add(cube);
+                    }
+                });
+            }
+            return group;
+        }
+
+        async function createGeneratedItem(model) {
+            const texturePath = model.textures?.layer0;
+            if (!texturePath) throw new Error("Нет текстуры layer0");
+
+            const url = resolveTextureUrl(texturePath);
+            const loader = new THREE.TextureLoader();
+
+            const texture = await new Promise((resolve, reject) => {
+                loader.load(url, tex => {
+                    tex.magFilter = THREE.NearestFilter;
+                    tex.minFilter = THREE.NearestFilter;
+                    tex.colorSpace = THREE.SRGBColorSpace;
+                    resolve(tex);
+                }, undefined, reject);
+            });
+
+            const geometry = new THREE.BoxGeometry(1, 1, 0.0625);
+            const material = new THREE.MeshStandardMaterial({
+                map: texture,
+                transparent: true,
+                alphaTest: 0.05,
+                side: THREE.DoubleSide
+            });
+
+            return new THREE.Mesh(geometry, material);
+        }
+
+        async function renderItem(modelPath) {
+            let modelData;
+            try {
+                modelData = await loadModelWithParents(modelPath);
+            } catch (e) {
+                throw new Error(`Load error: ${e.message}`);
+            }
+
+            if (mesh) {
+                scene.remove(mesh);
+                mesh.traverse(obj => {
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) {
+                        if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                        else obj.material.dispose();
+                    }
+                });
+                mesh = null;
+            }
+
+            if (rotationWrapper) {
+                scene.remove(rotationWrapper);
+                rotationWrapper = null;
+            }
+
+            if (modelData.parent === "item/generated") {
+                mesh = await createGeneratedItem(modelData);
+                rotationWrapper = new THREE.Group();
+                rotationWrapper.add(mesh);
+                scene.add(rotationWrapper);
+                fitCameraToMesh(mesh);
+            } else {
+                mesh = await createGeometryFromModel(modelData);
+                rotationWrapper = new THREE.Group();
+                rotationWrapper.add(mesh);
+                scene.add(rotationWrapper);
+                fitCameraToMesh(mesh);
+            }
+
+            if (RENDER_MODE === "png") {
+                renderer.render(scene, camera);
+                return renderer.domElement.toDataURL("image/png");
+            }
+
+            if (RENDER_MODE === "gif") {
+                return await renderGif();
+            }
+        }
+
+        async function renderGif() {
+            rotationWrapper.rotation.set(0, 0, 0);
+            return new Promise((resolve) => {
+                const gif = new GIF({
+                    workers: 2,
+                    quality: 1,
+                    width: CANVAS_SIZE,
+                    height: CANVAS_SIZE,
+                    workerScript: "gif.worker.js",
+                    transparent: 0x000000
+                });
+
+                const frames = 60;
+                const fullRotation = Math.PI * 2;
+                let currentFrame = 0;
+
+                function captureFrame() {
+                    rotationWrapper.rotation.y = (currentFrame / frames) * fullRotation;
+                    renderer.render(scene, camera);
+                    gif.addFrame(renderer.domElement, { copy: true, delay: 40 });
+                    currentFrame++;
+
+                    if (currentFrame < frames) {
+                        requestAnimationFrame(captureFrame);
+                    } else {
+                        gif.on("finished", function(blob) {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result);
+                            reader.readAsDataURL(blob);
+                        });
+                        gif.render();
+                    }
+                }
+                captureFrame();
+            });
+        }
+
+        const log = (msg, type='normal') => {
+            const div = document.createElement('div');
+            const time = new Date().toLocaleTimeString('ru-RU', {hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit'});
+            div.innerHTML = `<span class="time">[${time}]</span>${msg}`;
+            div.className = 'log-entry ' + type;
+            document.getElementById('log-container').prepend(div);
+        };
+
+        const updateStatus = (text, percent, etaText = "") => {
+            document.getElementById('status-text').textContent = text;
+            if (etaText) document.getElementById('eta-text').textContent = etaText;
+            document.getElementById('progress-bar').style.width = percent + '%';
+        };
+
+        async function startBatchProcess() {
+            initScene();
+            log(`Начат рендер ${modelsToRender.length} файлов...`);
+            
+            let total = modelsToRender.length;
+            let processed = 0;
+            const startTime = Date.now();
+
+            for (let modelPath of modelsToRender) {
+                processed++;
+                
+                const now = Date.now();
+                const elapsed = now - startTime;
+                const avgTimePerItem = elapsed / processed;
+                const remainingItems = total - processed;
+                const etaMs = avgTimePerItem * remainingItems;
+                
+                let etaString = "--:--";
+                if (processed > 0) {
+                    const totalSeconds = Math.floor(etaMs / 1000);
+                    const minutes = Math.floor(totalSeconds / 60);
+                    const seconds = totalSeconds % 60;
+                    etaString = `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+                }
+
+                updateStatus(`Рендеринг ${processed} из ${total}`, (processed/total)*100, `Осталось: ~${etaString}`);
+
+                try {
+                    const base64Image = await renderItem(modelPath);
+
+                    const cleanId = modelPath.replace('temp_pack/assets/', '').replace(".json", "");
+                    
+                    await fetch('/upload_image', {
+                        method: 'POST',
+                        body: JSON.stringify({ 
+                            id: cleanId,
+                            image: base64Image,
+                            mode: RENDER_MODE
+                        })
+                    });
+
+                    log(`Успешно: ${cleanId}`, "success");
+
+                } catch (e) {
+                    log(`Ошибка (${modelPath}): ${e.message}`, "error");
+                }
+
+                await new Promise(r => setTimeout(r, 30));
+            }
+
+            updateStatus('Готово', 100, 'Завершено');
+            document.getElementById('progress-bar').style.background = '#10b981';
+            log('Все задачи завершены!', 'success');
+        }
+    </script>
+</body>
+</html>
