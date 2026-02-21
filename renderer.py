@@ -105,7 +105,7 @@ class RenderRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(500, str(e))
 
     def log_message(self, format, *args):
-        if "upload_image" not in args[0]:
+        if args and isinstance(args[0], str) and "upload_image" not in args[0]:
             super().log_message(format, *args)
 
 if __name__ == "__main__":

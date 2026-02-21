@@ -653,13 +653,20 @@
             await Promise.all(promises);
             return textureMap;
         }
-
         async function loadModelWithParents(modelPath, depth = 0) {
             if (depth > 10) throw new Error("limit reached");
 
             const response = await fetch(modelPath);
             if (!response.ok) throw new Error("Model not found");
             const model = await response.json();
+
+            if (
+                model.parent === "item/generated" ||
+                model.parent === "minecraft:item/generated"
+            ) {
+                return model;
+            }
+
 
             if (!model.parent) return model;
 
@@ -683,6 +690,63 @@
                     ...(model.textures || {})
                 }
             };
+        }
+
+        async function createGeneratedModel(model) {
+            const group = new THREE.Group();
+            const textureMap = await loadModelTextures(model);
+
+            for (let i = 0; i < 5; i++) {
+                const layerKey = "layer" + i;
+                const tex = textureMap["#" + layerKey];
+                if (!tex) break;
+
+                const image = tex.image;
+                const canvas = document.createElement("canvas");
+                canvas.width = image.width;
+                canvas.height = image.height;
+
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(image, 0, 0);
+
+                const imageData = ctx.getImageData(0, 0, image.width, image.height);
+                const data = imageData.data;
+
+                const pixelSizeX = 1 / image.width;
+                const pixelSizeY = 1 / image.height;
+
+                for (let y = 0; y < image.height; y++) {
+                    for (let x = 0; x < image.width; x++) {
+
+                        const index = (y * image.width + x) * 4;
+                        const alpha = data[index + 3];
+                        if (alpha < 10) continue;
+
+                        const geometry = new THREE.BoxGeometry(
+                            pixelSizeX,
+                            pixelSizeY,
+                            0.0625
+                        );
+
+                        const material = new THREE.MeshStandardMaterial({
+                            map: tex,
+                            transparent: true,
+                            alphaTest: 0.1,
+                            side: THREE.DoubleSide
+                        });
+
+                        const mesh = new THREE.Mesh(geometry, material);
+
+                        mesh.position.x = x * pixelSizeX - 0.5 + pixelSizeX / 2;
+                        mesh.position.y = 0.5 - y * pixelSizeY - pixelSizeY / 2;
+                        mesh.position.z = 0;
+
+                        group.add(mesh);
+                    }
+                }
+            }
+
+            return group;
         }
 
         async function createGeometryFromModel(model) {
@@ -841,33 +905,6 @@
             return group;
         }
 
-        async function createGeneratedItem(model) {
-            const texturePath = model.textures?.layer0;
-            if (!texturePath) throw new Error("Нет текстуры layer0");
-
-            const url = resolveTextureUrl(texturePath);
-            const loader = new THREE.TextureLoader();
-
-            const texture = await new Promise((resolve, reject) => {
-                loader.load(url, tex => {
-                    tex.magFilter = THREE.NearestFilter;
-                    tex.minFilter = THREE.NearestFilter;
-                    tex.colorSpace = THREE.SRGBColorSpace;
-                    resolve(tex);
-                }, undefined, reject);
-            });
-
-            const geometry = new THREE.BoxGeometry(1, 1, 0.0625);
-            const material = new THREE.MeshStandardMaterial({
-                map: texture,
-                transparent: true,
-                alphaTest: 0.05,
-                side: THREE.DoubleSide
-            });
-
-            return new THREE.Mesh(geometry, material);
-        }
-
         async function renderItem(modelPath) {
             let modelData;
             try {
@@ -893,8 +930,8 @@
                 rotationWrapper = null;
             }
 
-            if (modelData.parent === "item/generated") {
-                mesh = await createGeneratedItem(modelData);
+            if (modelData.parent === "item/generated" || !modelData.elements) {
+                mesh = await createGeneratedModel(modelData);
                 rotationWrapper = new THREE.Group();
                 rotationWrapper.add(mesh);
                 scene.add(rotationWrapper);
