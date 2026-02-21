@@ -717,34 +717,44 @@
 
                 for (let y = 0; y < image.height; y++) {
                     for (let x = 0; x < image.width; x++) {
-
                         const index = (y * image.width + x) * 4;
                         const alpha = data[index + 3];
                         if (alpha < 10) continue;
 
-                        const geometry = new THREE.BoxGeometry(
-                            pixelSizeX,
-                            pixelSizeY,
-                            0.0625
-                        );
+                        // делаем маленькую текстуру только для этого пикселя
+                        const pixelCanvas = document.createElement('canvas');
+                        pixelCanvas.width = 1;
+                        pixelCanvas.height = 1;
+                        const ctx = pixelCanvas.getContext('2d');
+                        ctx.putImageData(new ImageData(new Uint8ClampedArray([
+                            data[index], data[index+1], data[index+2], data[index+3]
+                        ]), 1, 1), 0, 0);
+
+                        const pixelTex = new THREE.CanvasTexture(pixelCanvas);
+                        pixelTex.magFilter = THREE.NearestFilter;
+                        pixelTex.minFilter = THREE.NearestFilter;
+
+                        const geometry = new THREE.BoxGeometry(1 / image.width, 1 / image.height, 0.0625);
 
                         const material = new THREE.MeshStandardMaterial({
-                            map: tex,
+                            map: pixelTex,
                             transparent: true,
-                            alphaTest: 0.1,
+                            alphaTest: 0.05,
                             side: THREE.DoubleSide
                         });
 
                         const mesh = new THREE.Mesh(geometry, material);
 
-                        mesh.position.x = x * pixelSizeX - 0.5 + pixelSizeX / 2;
-                        mesh.position.y = 0.5 - y * pixelSizeY - pixelSizeY / 2;
+                        // позиция кубика
+                        mesh.position.x = x / image.width - 0.5 + 0.5 / image.width;
+                        mesh.position.y = 0.5 - y / image.height - 0.5 / image.height;
                         mesh.position.z = 0;
 
                         group.add(mesh);
                     }
                 }
             }
+
 
             return group;
         }
