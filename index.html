@@ -190,7 +190,7 @@
         }
 
         .sidebar-models {
-            width: 380px;
+            width: 420px;
             background: var(--bg-base);
             border-right: 1px solid var(--border-color);
             display: flex;
@@ -200,8 +200,11 @@
 
         .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
         .list-header span { font-size: 0.85rem; color: var(--text-dim); }
-        .list-actions button { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); padding: 4px 8px; font-size: 0.8rem; }
+        .list-actions { display: flex; gap: 4px; }
+        .list-actions button { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); padding: 4px 8px; font-size: 0.75rem; border-radius: 4px; }
         .list-actions button:hover { background: var(--bg-input); }
+        .list-actions .btn-link { color: #60a5fa; border-color: #3b82f6; }
+        .list-actions .btn-link:hover { background: rgba(59, 130, 246, 0.1); }
         
         .model-list-container {
             flex: 1;
@@ -224,6 +227,7 @@
         .model-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
         .model-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
         .model-item span { font-size: 0.85rem; word-break: break-all; }
+        .model-item.is-group { background: rgba(99, 102, 241, 0.05); border-color: rgba(99, 102, 241, 0.2); }
 
         .render-workspace {
             flex: 1;
@@ -288,6 +292,7 @@
         .log-entry.success { color: var(--success); } 
         .log-entry.error { color: var(--error); }
         .log-entry.normal { color: #d1d5db; }
+        .log-entry.warn { color: #f59e0b; }
 
         @media (max-width: 1100px) {
             #main-view { flex-direction: column; overflow-y: auto; }
@@ -335,8 +340,8 @@
                     <div class="form-group">
                         <label>Режим</label>
                         <select id="setting-mode">
-                            <option value="png">PNG</option>
-                            <option value="gif">GIF</option>
+                            <option value="png">PNG (Только первый кадр)</option>
+                            <option value="gif">GIF (Вращение / Анимация)</option>
                         </select>
                     </div>
                     <div class="form-group" style="margin-top: 5px;">
@@ -362,13 +367,14 @@
             
             <div style="padding: 15px; border-bottom: 1px solid var(--border-color); background: var(--bg-panel);">
                 <div class="form-group">
-                    <input type="text" id="model-search" placeholder="Поиск по названию или пути..." oninput="filterModels()">
+                    <input type="text" id="model-search" placeholder="Поиск по названию..." oninput="filterModels()">
                 </div>
                 <div class="list-header" style="margin-top: 15px; margin-bottom: 0;">
-                    <span>Список найденных файлов:</span>
+                    <span>Объекты:</span>
                     <div class="list-actions">
                         <button onclick="toggleAllModels(true)">Все</button>
                         <button onclick="toggleAllModels(false)">Сброс</button>
+                        <button class="btn-link" onclick="manualGroupSelected()" title="Объединить выбранные модели в одну покадровую анимацию">Связать</button>
                     </div>
                 </div>
             </div>
@@ -425,7 +431,7 @@
                         select.innerHTML += `<option value="${p}">${p}</option>`;
                     });
                     select.addEventListener('change', handlePackSelectionChange);
-                    handlePackSelectionChange();
+                    handlePackSelectionChange(); 
                 }
             } catch (e) {
                 alert("Ошибка связи с сервером. Проверьте консоль.");
@@ -447,11 +453,87 @@
             if (selected.length > 1) {
                 btn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg> Авто-рендер всех (${selected.length})`;
                 btn.onclick = () => startMultiPackBatch(selected.map(o => o.value));
-                document.getElementById('step-3').classList.add('disabled-panel');
+                document.getElementById('step-3').classList.add('disabled-panel'); 
             } else {
                 btn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> Распаковать архив`;
                 btn.onclick = () => extractPack();
             }
+        }
+
+        function processRawModelsIntoGroups(rawPaths) {
+            let processed = [];
+            
+            const extractBase = (path) => {
+                const match = path.match(/(.*?)(?:_pulling_\d+|_blocking|_charging_\d+|_cast|_stand|_walk|_\d+)?\.json$/);
+                return match ? match[1] : path.replace('.json', '');
+            };
+
+            const groupsMap = new Map();
+            rawPaths.forEach(p => {
+                const base = extractBase(p);
+                if (!groupsMap.has(base)) groupsMap.set(base, []);
+                groupsMap.get(base).push(p);
+            });
+
+            for (let [base, paths] of groupsMap.entries()) {
+                if (paths.length > 1) {
+                    paths.sort((a, b) => {
+                        const aIsBase = a.endsWith(base.split('/').pop() + '.json');
+                        const bIsBase = b.endsWith(base.split('/').pop() + '.json');
+                        if (aIsBase && !bIsBase) return -1;
+                        if (!aIsBase && bIsBase) return 1;
+                        return a.localeCompare(b);
+                    });
+
+                    processed.push({
+                        id: 'grp_' + btoa(base).replace(/=/g, ''),
+                        type: 'group',
+                        name: base.replace('temp_pack/assets/', ''),
+                        frames: paths
+                    });
+                } else {
+                    processed.push({
+                        id: paths[0],
+                        type: 'single',
+                        name: paths[0].replace('temp_pack/assets/', ''),
+                        path: paths[0]
+                    });
+                }
+            }
+            return processed;
+        }
+
+        function manualGroupSelected() {
+            const selectedObjs = availableModels.filter(m => selectedModels.has(m.id));
+            if (selectedObjs.length < 2) {
+                alert("Выберите как минимум 2 модели (галочками) для создания анимации!");
+                return;
+            }
+
+            const frames = [];
+            selectedObjs.forEach(obj => {
+                if (obj.type === 'single') frames.push(obj.path);
+                else frames.push(...obj.frames);
+            });
+
+            const groupName = prompt("Введите имя для этой анимации (например 'custom_sword'):", "custom_animation");
+            if (!groupName) return;
+
+            const newGroup = {
+                id: 'manual_' + Date.now(),
+                type: 'group',
+                name: "minecraft/models/item/" + groupName,
+                frames: frames
+            };
+
+            availableModels = availableModels.filter(m => !selectedModels.has(m.id));
+            availableModels.unshift(newGroup);
+
+            selectedModels.clear();
+            selectedModels.add(newGroup.id);
+
+            log(`Вручную создана анимация '${groupName}' из ${frames.length} кадров.`, 'warn');
+            renderModelList(document.getElementById('model-search').value.toLowerCase());
         }
 
         async function extractPack() {
@@ -470,8 +552,9 @@
                 });
                 const data = await res.json();
                 
-                availableModels = data.models || [];
-                selectedModels = new Set(availableModels);
+                availableModels = processRawModelsIntoGroups(data.models || []);
+                
+                selectedModels = new Set(availableModels.map(m => m.id));
                 
                 renderModelList();
                 
@@ -479,13 +562,13 @@
                 document.getElementById('step-3').classList.remove('disabled-panel');
                 document.getElementById('btn-start').classList.remove('disabled-panel');
                 
-                log(`Пак ${pack} успешно распакован. Найдено моделей: ${availableModels.length}`, 'success');
+                log(`Пак ${pack} успешно распакован. Найдено объектов: ${availableModels.length}`, 'success');
 
                 setTimeout(() => handlePackSelectionChange(), 2000);
 
             } catch(e) {
                 alert("Ошибка при распаковке архива.");
-                handlePackSelectionChange();
+                handlePackSelectionChange(); 
                 log(`Ошибка распаковки: ${e.message}`, 'error');
             }
         }
@@ -497,12 +580,12 @@
 
         function toggleAllModels(state) {
             const query = document.getElementById('model-search').value.toLowerCase();
-            const visibleModels = availableModels.filter(m => m.toLowerCase().includes(query));
+            const visibleModels = availableModels.filter(m => m.name.toLowerCase().includes(query));
             
             if (state) {
-                visibleModels.forEach(m => selectedModels.add(m));
+                visibleModels.forEach(m => selectedModels.add(m.id));
             } else {
-                visibleModels.forEach(m => selectedModels.delete(m));
+                visibleModels.forEach(m => selectedModels.delete(m.id));
             }
             renderModelList(query);
         }
@@ -524,24 +607,28 @@
             list.innerHTML = '';
             
             const frag = document.createDocumentFragment();
-            const filtered = filter ? availableModels.filter(m => m.toLowerCase().includes(filter)) : availableModels;
+            const filtered = filter ? availableModels.filter(m => m.name.toLowerCase().includes(filter)) : availableModels;
 
             filtered.forEach(m => {
                 const label = document.createElement('label');
-                label.className = 'model-item';
+                label.className = 'model-item' + (m.type === 'group' ? ' is-group' : '');
                 
                 const cb = document.createElement('input');
                 cb.type = 'checkbox';
-                cb.value = m;
-                cb.checked = selectedModels.has(m);
+                cb.value = m.id;
+                cb.checked = selectedModels.has(m.id);
                 cb.onchange = (e) => {
-                    if (e.target.checked) selectedModels.add(m);
-                    else selectedModels.delete(m);
+                    if (e.target.checked) selectedModels.add(m.id);
+                    else selectedModels.delete(m.id);
                     updateSelectedCount();
                 };
 
                 const span = document.createElement('span');
-                span.textContent = m.replace('temp_pack/assets/', '');
+                if (m.type === 'group') {
+                    span.innerHTML = `<strong>[📁 Анимация (${m.frames.length} кадр.)]</strong> ${m.name}`;
+                } else {
+                    span.textContent = m.name.replace('.json', '');
+                }
 
                 label.appendChild(cb);
                 label.appendChild(span);
@@ -935,7 +1022,7 @@
             return group;
         }
 
-        async function renderItem(modelPath) {
+        async function prepareModelScene(modelPath) {
             let modelData;
             try {
                 modelData = await loadModelWithParents(modelPath);
@@ -962,38 +1049,27 @@
 
             if (modelData.parent === "item/generated" || !modelData.elements) {
                 mesh = await createGeneratedModel(modelData);
-                rotationWrapper = new THREE.Group();
-                rotationWrapper.add(mesh);
-                scene.add(rotationWrapper);
-                fitCameraToMesh(mesh);
             } else {
                 mesh = await createGeometryFromModel(modelData);
-                rotationWrapper = new THREE.Group();
-                rotationWrapper.add(mesh);
-                scene.add(rotationWrapper);
-                fitCameraToMesh(mesh);
             }
 
-            if (RENDER_MODE === "png") {
-                renderer.render(scene, camera);
-                return renderer.domElement.toDataURL("image/png");
-            }
-
-            if (RENDER_MODE === "gif") {
-                return await renderGif();
-            }
+            rotationWrapper = new THREE.Group();
+            rotationWrapper.add(mesh);
+            scene.add(rotationWrapper);
+            fitCameraToMesh(mesh);
         }
 
-        async function renderGif() {
+        function capturePng() {
+            renderer.render(scene, camera);
+            return renderer.domElement.toDataURL("image/png");
+        }
+
+        async function captureSpinningGif() {
             rotationWrapper.rotation.set(0, 0, 0);
             return new Promise((resolve) => {
                 const gif = new GIF({
-                    workers: 2,
-                    quality: 1,
-                    width: CANVAS_SIZE,
-                    height: CANVAS_SIZE,
-                    workerScript: "gif.worker.js",
-                    transparent: 0x000000
+                    workers: 2, quality: 1, width: CANVAS_SIZE, height: CANVAS_SIZE,
+                    workerScript: "gif.worker.js", transparent: 0x000000
                 });
 
                 const frames = 60;
@@ -1021,6 +1097,30 @@
             });
         }
 
+        async function captureSequenceGif(framesPaths) {
+            return new Promise(async (resolve) => {
+                const gif = new GIF({
+                    workers: 2, quality: 1, width: CANVAS_SIZE, height: CANVAS_SIZE,
+                    workerScript: "gif.worker.js", transparent: 0x000000
+                });
+
+                for (let i = 0; i < framesPaths.length; i++) {
+                    await prepareModelScene(framesPaths[i]);
+                    rotationWrapper.rotation.set(0, 0, 0); 
+                    renderer.render(scene, camera);
+                    
+                    gif.addFrame(renderer.domElement, { copy: true, delay: 250 });
+                }
+
+                gif.on("finished", function(blob) {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.readAsDataURL(blob);
+                });
+                gif.render();
+            });
+        }
+
         const log = (msg, type='normal') => {
             const div = document.createElement('div');
             const time = new Date().toLocaleTimeString('ru-RU', {hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit'});
@@ -1040,7 +1140,7 @@
             let processed = 0;
             const startTime = Date.now();
 
-            for (let modelPath of modelsList) {
+            for (let item of modelsList) {
                 processed++;
                 const now = Date.now();
                 const elapsed = now - startTime;
@@ -1060,10 +1160,23 @@
                 updateStatus(`${prefix}Рендер ${processed} из ${total}`, (processed/total)*100, `Осталось: ~${etaString}`);
 
                 try {
-                    const base64Image = await renderItem(modelPath);
+                    let base64Image;
+                    let cleanId;
 
-                    let cleanId = modelPath.replace('temp_pack/assets/', '').replace(".json", "");
-                    
+                    if (item.type === 'single') {
+                        cleanId = item.path.replace('temp_pack/assets/', '').replace(".json", "");
+                        await prepareModelScene(item.path);
+                        base64Image = RENDER_MODE === 'png' ? capturePng() : await captureSpinningGif();
+                    } else {
+                        cleanId = item.name.replace('temp_pack/assets/', '').replace(".json", "");
+                        if (RENDER_MODE === 'png') {
+                            await prepareModelScene(item.frames[0]);
+                            base64Image = capturePng();
+                        } else {
+                            base64Image = await captureSequenceGif(item.frames);
+                        }
+                    }
+
                     if (packName) {
                         const pName = packName.replace('.zip', '');
                         cleanId = `${pName}/${cleanId}`;
@@ -1080,7 +1193,7 @@
 
                     log(`Успешно: ${cleanId}`, "success");
                 } catch (e) {
-                    log(`Ошибка (${modelPath}): ${e.message}`, "error");
+                    log(`Ошибка (${item.name || item.path}): ${e.message}`, "error");
                 }
 
                 await new Promise(r => setTimeout(r, 30));
@@ -1090,7 +1203,8 @@
         async function startBatchProcess() {
             RENDER_MODE = document.getElementById('setting-mode').value;
             CANVAS_SIZE = parseInt(document.getElementById('setting-size').value) || 800;
-            modelsToRender = Array.from(selectedModels);
+            
+            modelsToRender = availableModels.filter(m => selectedModels.has(m.id));
 
             document.getElementById('step-1-2').classList.add('disabled-panel');
             document.getElementById('step-3').classList.add('disabled-panel');
@@ -1107,7 +1221,7 @@
             initScene();
             if (renderer) renderer.setSize(CANVAS_SIZE, CANVAS_SIZE);
             
-            log(`Начат рендер ${modelsToRender.length} файлов...`);
+            log(`Начат рендер ${modelsToRender.length} элементов...`);
             
             const select = document.getElementById('pack-select');
             const packName = select.selectedOptions.length > 0 ? select.selectedOptions[0].value : "";
@@ -1154,14 +1268,15 @@
                         body: JSON.stringify({ pack })
                     });
                     const data = await res.json();
-                    const models = data.models || [];
+                    
+                    const models = processRawModelsIntoGroups(data.models || []);
                     
                     if (models.length === 0) {
                          log(`[${pack}] Нет моделей для рендера. Пропуск.`, 'normal');
                          continue;
                     }
 
-                    log(`[${pack}] Найдено ${models.length} моделей. Запуск рендера...`);
+                    log(`[${pack}] Найдено ${models.length} объектов для рендера. Запуск...`);
                     await runRenderLoop(models, pack);
 
                 } catch (e) {
