@@ -18,8 +18,7 @@
             --text-dim: #9ca3af;
             --success: #10b981;
             --error: #ef4444;
-            --radius: 12px;
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+            --radius: 6px;
         }
         
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -35,7 +34,7 @@
         }
 
         ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: var(--bg-panel); border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: var(--bg-panel); }
         ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
 
@@ -46,7 +45,7 @@
             color: white;
             border: none;
             padding: 10px 16px;
-            border-radius: 6px;
+            border-radius: var(--radius);
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
@@ -64,92 +63,27 @@
             border: 1px solid var(--border-color);
             color: var(--text-main);
             padding: 10px 12px;
-            border-radius: 6px;
+            border-radius: var(--radius);
             outline: none;
             transition: border-color 0.2s;
         }
-        input:focus, select:focus { border-color: var(--accent); }
-
-        #setup-view {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 40px 20px;
-            overflow-y: auto;
-        }
-
-        .setup-header { text-align: center; margin-bottom: 30px; }
-        .setup-header h1 { font-size: 2.5rem; font-weight: 800; background: linear-gradient(135deg, #818cf8, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .setup-header p { color: var(--text-dim); margin-top: 8px; }
-
-        .setup-grid {
-            display: grid;
-            grid-template-columns: 350px 450px;
-            gap: 24px;
-            max-width: 900px;
-            width: 100%;
-        }
-
-        .card {
-            background: var(--bg-panel);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            padding: 24px;
-            box-shadow: var(--shadow);
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-        .card h2 { font-size: 1.1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;}
-        .card h2 span { background: var(--accent); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; }
-
-        .form-group { display: flex; flex-direction: column; gap: 8px; }
-        .form-group label { font-size: 0.9rem; color: var(--text-dim); font-weight: 500; }
-        .form-row { display: flex; gap: 12px; }
-        .form-row .form-group { flex: 1; }
-
-        .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .list-header span { font-size: 0.85rem; color: var(--text-dim); }
-        .list-actions button { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); padding: 4px 8px; font-size: 0.8rem; }
-        .list-actions button:hover { background: var(--bg-input); }
         
-        .model-list-container {
-            flex: 1;
-            min-height: 250px;
-            max-height: 350px;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            overflow-y: auto;
-            padding: 8px;
+        select[multiple] {
+            padding: 4px;
+            height: 150px;
         }
-
-        .model-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        select[multiple] option {
             padding: 6px 10px;
+            margin-bottom: 2px;
             border-radius: 4px;
             cursor: pointer;
-            transition: background 0.1s;
         }
-        .model-item:hover { background: rgba(255,255,255,0.05); }
-        .model-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
-        .model-item span { font-size: 0.85rem; word-break: break-all; }
-
-        .disabled-panel { opacity: 0.5; pointer-events: none; }
-
-        .start-render-wrapper { grid-column: 1 / -1; display: flex; justify-content: flex-end; margin-top: 10px;}
-        .start-render-wrapper button { padding: 14px 32px; font-size: 1.1rem; background: var(--success); }
-        .start-render-wrapper button:hover:not(:disabled) { background: #059669; }
-
-        #app-view {
-            flex: 1;
-            display: none;
-            flex-direction: column;
-            overflow: hidden;
+        select[multiple] option:checked {
+            background: var(--accent);
+            color: white;
         }
+
+        input:focus, select:focus { border-color: var(--accent); }
 
         header {
             height: 60px;
@@ -175,10 +109,12 @@
             font-weight: bold;
             text-transform: uppercase;
             letter-spacing: 1px;
+            transition: background-color 0.3s;
         }
+        .mode-badge.setup { background-color: #4b5563; }
         .mode-badge.gif { background-color: #d97706; }
         .mode-badge.png { background-color: var(--accent); }
-        
+
         #status-area {
             display: flex;
             align-items: center;
@@ -198,6 +134,7 @@
             background: #333;
             border-radius: 4px;
             overflow: hidden;
+            display: none;
         }
         #progress-bar {
             width: 0%;
@@ -207,14 +144,100 @@
             box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
         }
 
-        main { display: flex; flex: 1; overflow: hidden; position: relative; }
+        #main-view {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 12px 15px;
+            background: rgba(0,0,0,0.2);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            flex-shrink: 0;
+        }
+
+        .form-group { display: flex; flex-direction: column; gap: 8px; }
+        .form-group label { font-size: 0.9rem; color: var(--text-dim); font-weight: 500; }
+        
+        .disabled-panel { opacity: 0.5; pointer-events: none; filter: grayscale(30%); transition: all 0.3s; }
+
+        .sidebar-setup {
+            width: 300px;
+            background: var(--bg-panel);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .tech-panel {
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .panel-content {
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .sidebar-models {
+            width: 380px;
+            background: var(--bg-base);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .list-header span { font-size: 0.85rem; color: var(--text-dim); }
+        .list-actions button { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); padding: 4px 8px; font-size: 0.8rem; }
+        .list-actions button:hover { background: var(--bg-input); }
+        
+        .model-list-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .model-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.1s;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 6px;
+        }
+        .model-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
+        .model-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+        .model-item span { font-size: 0.85rem; word-break: break-all; }
+
+        .render-workspace {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #000;
+            min-width: 0;
+        }
 
         #render-section {
             flex: 1;
             display: flex;
             justify-content: center;
             align-items: center;
-            background: #000;
             position: relative;
             overflow: hidden; 
             padding: 20px;
@@ -232,30 +255,18 @@
         #canvas-container canvas {
             display: block;
             max-width: 100%; 
-            max-height: 80vh; 
+            max-height: 100%; 
             height: auto !important; 
             width: auto !important;
         }
 
         #log-section {
-            width: 380px;
+            height: 250px;
             background: var(--bg-panel);
-            border-left: 1px solid var(--border-color);
+            border-top: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             flex-shrink: 0;
-            z-index: 10;
-        }
-        
-        .panel-header {
-            padding: 12px 15px;
-            background: rgba(0,0,0,0.2);
-            border-bottom: 1px solid var(--border-color);
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            font-weight: bold;
-            letter-spacing: 0.05em;
-            color: var(--text-dim);
         }
 
         #log-container {
@@ -278,110 +289,116 @@
         .log-entry.error { color: var(--error); }
         .log-entry.normal { color: #d1d5db; }
 
-        @media (max-width: 900px) {
-            .setup-grid { grid-template-columns: 1fr; }
-            main { flex-direction: column; }
-            #render-section { min-height: 40vh; flex: 1; }
-            #log-section { width: 100%; height: 40vh; border-left: none; border-top: 1px solid var(--border-color); }
+        @media (max-width: 1100px) {
+            #main-view { flex-direction: column; overflow-y: auto; }
+            .sidebar-setup, .sidebar-models { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); }
+            .sidebar-models { height: 400px; flex-shrink: 0; }
+            .render-workspace { height: 800px; flex-shrink: 0; }
         }
     </style>
 </head>
 <body>
-    <div id="setup-view">
-        <div class="setup-header">
-            <h1>RenderJson</h1>
-            <p>By kreo_gen & mrlemonhog</p>
+    
+    <header>
+        <div class="brand-area">
+            <div class="header-title">RenderJson</div>
+            <div id="mode-badge" class="mode-badge setup">ОЖИДАНИЕ</div>
         </div>
+        <div id="status-area">
+            <div class="status-info">
+                <div id="status-text" style="color: var(--text-main); font-weight: normal; font-size: 0.95rem;">Готов к работе</div>
+                <div id="eta-text">by kreo_gen & mrlemonhog</div>
+            </div>
+            <div id="progress-track"><div id="progress-bar"></div></div>
+        </div>
+    </header>
 
-        <div class="setup-grid">
-            <div style="display: flex; flex-direction: column; gap: 24px;">
-                <div class="card">
-                    <h2><span>1</span>Ресурспак</h2>
+    <main id="main-view">
+        <aside class="sidebar-setup" id="step-1-2">
+            
+            <div class="tech-panel">
+                <div class="panel-header">1. Ресурспак</div>
+                <div class="panel-content">
                     <div class="form-group">
-                        <label>Выберите .zip архив из папки /import</label>
-                        <select id="pack-select">
+                        <label>Выберите .zip архив(ы) из /import</label>
+                        <div style="font-size: 0.75rem; color: var(--text-dim); margin-top: -4px;">Зажмите Ctrl/Shift для выбора нескольких</div>
+                        <select id="pack-select" multiple title="Используйте Ctrl / Shift для выделения нескольких">
                             <option value="">Загрузка...</option>
                         </select>
-                    </div>
-                    <button id="btn-extract" onclick="extractPack()">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                        Распаковать архив
-                    </button>
-                </div>
-
-                <div class="card disabled-panel" id="settings-card">
-                    <h2><span>2</span> Настройки рендера</h2>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Режим</label>
-                            <select id="setting-mode">
-                                <option value="png">PNG</option>
-                                <option value="gif">GIF</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Разрешение (px)</label>
-                            <input type="number" id="setting-size" value="800" min="100" max="2048">
-                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="card disabled-panel" id="models-card" style="display: flex; flex-direction: column;">
-                <h2><span>3</span> Выбор моделей</h2>
+            <div class="tech-panel" id="settings-card" style="flex: 1;">
+                <div class="panel-header">2. Настройки рендера</div>
+                <div class="panel-content">
+                    <div class="form-group">
+                        <label>Режим</label>
+                        <select id="setting-mode">
+                            <option value="png">PNG</option>
+                            <option value="gif">GIF</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-top: 5px;">
+                        <label>Разрешение (px)</label>
+                        <input type="number" id="setting-size" value="800" min="100" max="2048">
+                    </div>
+                </div>
+            </div>
+            
+            <div style="padding: 15px; border-top: 1px solid var(--border-color); background: var(--bg-panel); margin-top: auto; display: flex; justify-content: center;">
+                <button id="btn-extract" disabled style="width: 100%; padding: 12px 0; font-size: 1.05rem;">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    Распаковать архив
+                </button>
+            </div>
+        </aside>
+
+        <section class="sidebar-models disabled-panel" id="step-3">
+            <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>3. Выбор моделей</span>
+                <span id="models-count-text" style="font-size: 0.85rem; font-weight: normal; color: var(--text-dim); text-transform: none;">Выбрано: 0 / 0</span>
+            </div>
+            
+            <div style="padding: 15px; border-bottom: 1px solid var(--border-color); background: var(--bg-panel);">
                 <div class="form-group">
                     <input type="text" id="model-search" placeholder="Поиск по названию или пути..." oninput="filterModels()">
                 </div>
-                
-                <div class="list-header">
-                    <span id="models-count-text">Выбрано: 0 / 0</span>
+                <div class="list-header" style="margin-top: 15px; margin-bottom: 0;">
+                    <span>Список найденных файлов:</span>
                     <div class="list-actions">
                         <button onclick="toggleAllModels(true)">Все</button>
                         <button onclick="toggleAllModels(false)">Сброс</button>
                     </div>
                 </div>
-
-                <div class="model-list-container" id="model-list">
-                </div>
             </div>
-
-            <div class="start-render-wrapper">
-                <button id="btn-start" class="disabled-panel" onclick="startRenderProcess()">
+            
+            <div class="model-list-container" id="model-list">
+            </div>
+            
+            <div style="padding: 15px; border-top: 1px solid var(--border-color); background: var(--bg-panel); display: flex; justify-content: center;">
+                <button id="btn-start" class="disabled-panel" onclick="startBatchProcess()" style="background: var(--success); padding: 12px 0; width: 100%; font-size: 1.05rem;">
                     Начать Рендер
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                 </button>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <div id="app-view">
-        <header>
-            <div class="brand-area">
-                <div class="header-title">RenderJson</div>
-                <div id="mode-badge" class="mode-badge">загрузка</div>
-            </div>
-            <div id="status-area">
-                <div class="status-info">
-                    <div id="status-text">Инициализация...</div>
-                    <div id="eta-text">Ожидание запуска...</div>
-                </div>
-                <div id="progress-track"><div id="progress-bar"></div></div>
-            </div>
-        </header>
-
-        <main>
-            <section id="render-section">
+        <section class="render-workspace">
+            <div id="render-section">
                 <div id="canvas-wrapper">
                     <div id="canvas-container"></div>
                 </div>
-            </section>
+            </div>
             
-            <section id="log-section">
-                <div class="panel-header">Логи</div>
-                <div id="log-container"></div>
-            </section>
-        </main>
-    </div>
+            <div id="log-section">
+                <div class="panel-header" style="background: transparent;">Логи процесса</div>
+                <div id="log-container">
+                    <div class="log-entry normal"><span class="time"></span>Система готова. Ожидание распаковки пака...</div>
+                </div>
+            </div>
+        </section>
+    </main>
 
     <script>
         let availableModels = [];
@@ -407,18 +424,43 @@
                     data.packs.forEach(p => {
                         select.innerHTML += `<option value="${p}">${p}</option>`;
                     });
+                    select.addEventListener('change', handlePackSelectionChange);
+                    handlePackSelectionChange();
                 }
             } catch (e) {
                 alert("Ошибка связи с сервером. Проверьте консоль.");
             }
         };
 
+        function handlePackSelectionChange() {
+            const select = document.getElementById('pack-select');
+            const selected = Array.from(select.selectedOptions).filter(o => o.value !== "");
+            const btn = document.getElementById('btn-extract');
+            
+            if (selected.length === 0) {
+                btn.disabled = true;
+                btn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> Распаковать архив`;
+                return;
+            }
+            btn.disabled = false;
+
+            if (selected.length > 1) {
+                btn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg> Авто-рендер всех (${selected.length})`;
+                btn.onclick = () => startMultiPackBatch(selected.map(o => o.value));
+                document.getElementById('step-3').classList.add('disabled-panel');
+            } else {
+                btn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> Распаковать архив`;
+                btn.onclick = () => extractPack();
+            }
+        }
+
         async function extractPack() {
-            const pack = document.getElementById('pack-select').value;
-            if (!pack) return;
+            const select = document.getElementById('pack-select');
+            if (select.selectedOptions.length === 0) return;
+            const pack = select.selectedOptions[0].value;
 
             const btn = document.getElementById('btn-extract');
-            btn.innerHTML = '<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Распаковка...';
+            btn.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Распаковка...';
             btn.disabled = true;
 
             try {
@@ -434,14 +476,17 @@
                 renderModelList();
                 
                 btn.innerHTML = '✔ Загружено';
-                document.getElementById('settings-card').classList.remove('disabled-panel');
-                document.getElementById('models-card').classList.remove('disabled-panel');
+                document.getElementById('step-3').classList.remove('disabled-panel');
                 document.getElementById('btn-start').classList.remove('disabled-panel');
+                
+                log(`Пак ${pack} успешно распакован. Найдено моделей: ${availableModels.length}`, 'success');
+
+                setTimeout(() => handlePackSelectionChange(), 2000);
 
             } catch(e) {
                 alert("Ошибка при распаковке архива.");
-                btn.innerHTML = 'Ошибка';
-                btn.disabled = false;
+                handlePackSelectionChange();
+                log(`Ошибка распаковки: ${e.message}`, 'error');
             }
         }
 
@@ -470,7 +515,7 @@
                 btnStart.textContent = "Выберите модели";
             } else {
                 btnStart.disabled = false;
-                btnStart.innerHTML = `Начать Рендер (${selectedModels.size})`;
+                btnStart.innerHTML = `Начать Рендер (${selectedModels.size}) <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>`;
             }
         }
 
@@ -507,27 +552,9 @@
             updateSelectedCount();
         }
 
-        function startRenderProcess() {
-            RENDER_MODE = document.getElementById('setting-mode').value;
-            CANVAS_SIZE = parseInt(document.getElementById('setting-size').value) || 800;
-            modelsToRender = Array.from(selectedModels);
-
-            document.getElementById('setup-view').style.display = 'none';
-            document.getElementById('app-view').style.display = 'flex';
-
-            const badge = document.getElementById('mode-badge');
-            if (RENDER_MODE === 'gif') {
-                badge.textContent = 'GIF MODE';
-                badge.className = 'mode-badge gif';
-            } else {
-                badge.textContent = 'IMG MODE';
-                badge.className = 'mode-badge png';
-            }
-
-            setTimeout(startBatchProcess, 100);
-        }
-
         function initScene() {
+            if (renderer) return; 
+            
             scene = new THREE.Scene();
             camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
             
@@ -653,6 +680,7 @@
             await Promise.all(promises);
             return textureMap;
         }
+        
         async function loadModelWithParents(modelPath, depth = 0) {
             if (depth > 10) throw new Error("limit reached");
 
@@ -666,7 +694,6 @@
             ) {
                 return model;
             }
-
 
             if (!model.parent) return model;
 
@@ -712,16 +739,12 @@
                 const imageData = ctx.getImageData(0, 0, image.width, image.height);
                 const data = imageData.data;
 
-                const pixelSizeX = 1 / image.width;
-                const pixelSizeY = 1 / image.height;
-
                 for (let y = 0; y < image.height; y++) {
                     for (let x = 0; x < image.width; x++) {
                         const index = (y * image.width + x) * 4;
                         const alpha = data[index + 3];
                         if (alpha < 10) continue;
 
-                        // делаем маленькую текстуру только для этого пикселя
                         const pixelCanvas = document.createElement('canvas');
                         pixelCanvas.width = 1;
                         pixelCanvas.height = 1;
@@ -745,7 +768,6 @@
 
                         const mesh = new THREE.Mesh(geometry, material);
 
-                        // позиция кубика
                         mesh.position.x = x / image.width - 0.5 + 0.5 / image.width;
                         mesh.position.y = 0.5 - y / image.height - 0.5 / image.height;
                         mesh.position.z = 0;
@@ -754,8 +776,6 @@
                     }
                 }
             }
-
-
             return group;
         }
 
@@ -1015,17 +1035,13 @@
             document.getElementById('progress-bar').style.width = percent + '%';
         };
 
-        async function startBatchProcess() {
-            initScene();
-            log(`Начат рендер ${modelsToRender.length} файлов...`);
-            
-            let total = modelsToRender.length;
+        async function runRenderLoop(modelsList, packName = "") {
+            let total = modelsList.length;
             let processed = 0;
             const startTime = Date.now();
 
-            for (let modelPath of modelsToRender) {
+            for (let modelPath of modelsList) {
                 processed++;
-                
                 const now = Date.now();
                 const elapsed = now - startTime;
                 const avgTimePerItem = elapsed / processed;
@@ -1040,12 +1056,18 @@
                     etaString = `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
                 }
 
-                updateStatus(`Рендеринг ${processed} из ${total}`, (processed/total)*100, `Осталось: ~${etaString}`);
+                const prefix = packName ? `[${packName}] ` : "";
+                updateStatus(`${prefix}Рендер ${processed} из ${total}`, (processed/total)*100, `Осталось: ~${etaString}`);
 
                 try {
                     const base64Image = await renderItem(modelPath);
 
-                    const cleanId = modelPath.replace('temp_pack/assets/', '').replace(".json", "");
+                    let cleanId = modelPath.replace('temp_pack/assets/', '').replace(".json", "");
+                    
+                    if (packName) {
+                        const pName = packName.replace('.zip', '');
+                        cleanId = `${pName}/${cleanId}`;
+                    }
                     
                     await fetch('/upload_image', {
                         method: 'POST',
@@ -1057,17 +1079,101 @@
                     });
 
                     log(`Успешно: ${cleanId}`, "success");
-
                 } catch (e) {
                     log(`Ошибка (${modelPath}): ${e.message}`, "error");
                 }
 
                 await new Promise(r => setTimeout(r, 30));
             }
+        }
+
+        async function startBatchProcess() {
+            RENDER_MODE = document.getElementById('setting-mode').value;
+            CANVAS_SIZE = parseInt(document.getElementById('setting-size').value) || 800;
+            modelsToRender = Array.from(selectedModels);
+
+            document.getElementById('step-1-2').classList.add('disabled-panel');
+            document.getElementById('step-3').classList.add('disabled-panel');
+
+            const badge = document.getElementById('mode-badge');
+            badge.textContent = (RENDER_MODE === 'gif' ? 'GIF' : 'IMG') + ' MODE';
+            badge.className = 'mode-badge ' + (RENDER_MODE === 'gif' ? 'gif' : 'png');
+
+            document.getElementById('progress-track').style.visibility = 'visible';
+            document.getElementById('progress-bar').style.width = '0%';
+            document.getElementById('progress-bar').style.background = 'var(--success)';
+            document.getElementById('log-container').innerHTML = '';
+
+            initScene();
+            if (renderer) renderer.setSize(CANVAS_SIZE, CANVAS_SIZE);
+            
+            log(`Начат рендер ${modelsToRender.length} файлов...`);
+            
+            const select = document.getElementById('pack-select');
+            const packName = select.selectedOptions.length > 0 ? select.selectedOptions[0].value : "";
+
+            await runRenderLoop(modelsToRender, packName);
 
             updateStatus('Готово', 100, 'Завершено');
             document.getElementById('progress-bar').style.background = '#10b981';
             log('Все задачи завершены!', 'success');
+            
+            document.getElementById('step-1-2').classList.remove('disabled-panel');
+            document.getElementById('step-3').classList.remove('disabled-panel');
+        }
+
+        async function startMultiPackBatch(packs) {
+            RENDER_MODE = document.getElementById('setting-mode').value;
+            CANVAS_SIZE = parseInt(document.getElementById('setting-size').value) || 800;
+            
+            document.getElementById('step-1-2').classList.add('disabled-panel');
+            document.getElementById('step-3').classList.add('disabled-panel');
+            
+            const badge = document.getElementById('mode-badge');
+            badge.textContent = (RENDER_MODE === 'gif' ? 'GIF' : 'IMG') + ' BATCH';
+            badge.className = 'mode-badge ' + (RENDER_MODE === 'gif' ? 'gif' : 'png');
+
+            document.getElementById('progress-track').style.visibility = 'visible';
+            document.getElementById('progress-bar').style.width = '0%';
+            document.getElementById('progress-bar').style.background = 'var(--success)';
+            document.getElementById('log-container').innerHTML = '';
+
+            initScene();
+            if (renderer) renderer.setSize(CANVAS_SIZE, CANVAS_SIZE);
+            
+            log(`Начат автоматический пакетный рендер ${packs.length} ресурспаков...`, 'success');
+
+            for (let i = 0; i < packs.length; i++) {
+                const pack = packs[i];
+                log(`[${i+1}/${packs.length}] Распаковка ${pack}...`);
+                updateStatus(`Распаковка ${pack}...`, (i / packs.length) * 100, `Ожидание`);
+                
+                try {
+                    const res = await fetch('/api/extract', {
+                        method: 'POST',
+                        body: JSON.stringify({ pack })
+                    });
+                    const data = await res.json();
+                    const models = data.models || [];
+                    
+                    if (models.length === 0) {
+                         log(`[${pack}] Нет моделей для рендера. Пропуск.`, 'normal');
+                         continue;
+                    }
+
+                    log(`[${pack}] Найдено ${models.length} моделей. Запуск рендера...`);
+                    await runRenderLoop(models, pack);
+
+                } catch (e) {
+                    log(`[${pack}] Ошибка распаковки: ${e.message}`, 'error');
+                }
+            }
+
+            updateStatus('Готово', 100, 'Все паки завершены');
+            document.getElementById('progress-bar').style.background = '#10b981';
+            log('Пакетный рендер всех выбранных паков завершен!', 'success');
+            
+            document.getElementById('step-1-2').classList.remove('disabled-panel');
         }
     </script>
 </body>
