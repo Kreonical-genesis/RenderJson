@@ -460,6 +460,7 @@
 
         let scene, camera, renderer, mesh, rotationWrapper;
         let extractedFiles = {};
+        let mcmetaCache = {}; // path -> parsed mcmeta JSON
 
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
@@ -549,6 +550,7 @@
             btn.disabled = true;
 
             extractedFiles = {};
+            mcmetaCache = {};
             let allModels = [];
 
             for (const [packName, zip] of loadedPacks) {
@@ -573,6 +575,11 @@
                         if (fileName.includes('/models/')) {
                             allModels.push(fileName);
                         }
+                    } else if (fileName.endsWith('.mcmeta')) {
+                        const content = await zipEntry.async('string');
+                        try {
+                            mcmetaCache[fileName] = JSON.parse(content);
+                        } catch(e) {}
                     } else {
                         extractedFiles[fileName] = await zipEntry.async('uint8array');
                     }
@@ -789,7 +796,7 @@
             camera.updateProjectionMatrix();
         }
 
-        async function loadModelTextures(model) {
+        async function loadModelTextures(model, frameIndex) {
             const textureMap = {};
             const loader = new THREE.TextureLoader();
             
@@ -829,17 +836,18 @@
             for (let key in model.textures) {
                 const finalPath = resolveRef(key);
                 if (finalPath) {
-                    let url;
+                    let urlPromise;
                     if (finalPath.startsWith('items_displayed:')) {
                         const cleanName = finalPath.split(':')[1];
                         const fullPath = contextNamespace + ":" + contextDir + cleanName;
-                        url = resolveTextureUrlFromZip(fullPath);
+                        urlPromise = resolveTextureUrlFromZip(fullPath, frameIndex);
                     } else {
-                        url = resolveTextureUrlFromZip(finalPath);
+                        urlPromise = resolveTextureUrlFromZip(finalPath, frameIndex);
                     }
 
-                    if (url) {
-                        promises.push(new Promise((resolve) => {
+                    promises.push(urlPromise.then(url => {
+                        if (!url) return;
+                        return new Promise((resolve) => {
                             loader.load(url, (tex) => {
                                 tex.magFilter = THREE.NearestFilter;
                                 tex.minFilter = THREE.NearestFilter;
@@ -849,15 +857,67 @@
                             }, undefined, () => {
                                 resolve();
                             });
-                        }));
-                    }
+                        });
+                    }));
                 }
             }
             await Promise.all(promises);
             return textureMap;
         }
 
-        function resolveTextureUrlFromZip(texturePath) {
+        function getMcmeta(textureFilePng) {
+            const key = textureFilePng + '.mcmeta';
+            return mcmetaCache[key] || null;
+        }
+
+        function cropAnimationFrame(rawBytes, mcmeta, frameIndex) {
+            try {
+                const blob = new Blob([rawBytes], { type: 'image/png' });
+                const url = URL.createObjectURL(blob);
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const frameW = img.width;
+                        const frameH = frameW;
+                        const totalFrames = Math.floor(img.height / frameH);
+
+                        const animation = (mcmeta && mcmeta.animation) || {};
+                        let rawFrameIndex = frameIndex;
+                        if (animation.frames && animation.frames.length > 0) {
+                            const framesArr = animation.frames;
+                            const entry = framesArr[frameIndex % framesArr.length];
+                            rawFrameIndex = (typeof entry === 'object') ? entry.index : entry;
+                        } else {
+                            rawFrameIndex = frameIndex % totalFrames;
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = frameW;
+                        canvas.height = frameH;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, -(rawFrameIndex * frameH));
+                        URL.revokeObjectURL(url);
+                        canvas.toBlob((b) => {
+                            resolve(URL.createObjectURL(b));
+                        }, 'image/png');
+                    };
+                    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+                    img.src = url;
+                });
+            } catch(e) {
+                return Promise.resolve(null);
+            }
+        }
+
+        function getTextureFrameCount(textureFilePng) {
+            const mcmeta = getMcmeta(textureFilePng);
+            if (!mcmeta || !mcmeta.animation) return 1;
+            const frames = mcmeta.animation.frames;
+            if (frames && frames.length > 0) return frames.length;
+            return -1;
+        }
+
+        function resolveTextureUrlFromZip(texturePath, frameIndex) {
             let namespace = 'minecraft';
             let path = texturePath;
             if (texturePath.includes(':')) {
@@ -868,19 +928,30 @@
             
             const textureFile = `assets/${namespace}/textures/${path}`;
             
+            let rawBytes = null;
+            let resolvedPath = null;
+
             if (extractedFiles[textureFile]) {
-                const isPng = textureFile.endsWith('.png') || textureFile.endsWith('.png');
-                const blob = new Blob([extractedFiles[textureFile]], { type: isPng ? 'image/png' : 'image/png' });
-                return URL.createObjectURL(blob);
+                rawBytes = extractedFiles[textureFile];
+                resolvedPath = textureFile;
+            } else {
+                const textureFilePng = textureFile + '.png';
+                if (extractedFiles[textureFilePng]) {
+                    rawBytes = extractedFiles[textureFilePng];
+                    resolvedPath = textureFilePng;
+                }
             }
-            
-            const textureFilePng = textureFile + '.png';
-            if (extractedFiles[textureFilePng]) {
-                const blob = new Blob([extractedFiles[textureFilePng]], { type: 'image/png' });
-                return URL.createObjectURL(blob);
+
+            if (!rawBytes) return Promise.resolve(null);
+
+            const mcmeta = getMcmeta(resolvedPath);
+            if (!mcmeta || !mcmeta.animation) {
+                const blob = new Blob([rawBytes], { type: 'image/png' });
+                return Promise.resolve(URL.createObjectURL(blob));
             }
-            
-            return null;
+
+            const fi = frameIndex || 0;
+            return cropAnimationFrame(rawBytes, mcmeta, fi);
         }
 
         async function loadModelWithParentsFromZip(modelPath, depth = 0) {
@@ -923,9 +994,9 @@
             };
         }
 
-        async function createGeneratedModel(model) {
+        async function createGeneratedModel(model, frameIndex) {
             const group = new THREE.Group();
-            const textureMap = await loadModelTextures(model);
+            const textureMap = await loadModelTextures(model, frameIndex);
 
             for (let i = 0; i < 5; i++) {
                 const layerKey = "layer" + i;
@@ -983,8 +1054,8 @@
             return group;
         }
 
-        async function createGeometryFromModel(model) {
-            const textureMap = await loadModelTextures(model);
+        async function createGeometryFromModel(model, frameIndex) {
+            const textureMap = await loadModelTextures(model, frameIndex);
             const group = new THREE.Group();
             const transparentMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, depthTest: false });
 
@@ -1139,7 +1210,7 @@
             return group;
         }
 
-        async function prepareModelScene(modelPath) {
+        async function prepareModelScene(modelPath, frameIndex) {
             let modelData;
             try {
                 modelData = await loadModelWithParentsFromZip(modelPath);
@@ -1165,9 +1236,9 @@
             }
 
             if (modelData.parent === "item/generated" || !modelData.elements) {
-                mesh = await createGeneratedModel(modelData);
+                mesh = await createGeneratedModel(modelData, frameIndex);
             } else {
-                mesh = await createGeometryFromModel(modelData);
+                mesh = await createGeometryFromModel(modelData, frameIndex);
             }
 
             rotationWrapper = new THREE.Group();
@@ -1222,7 +1293,7 @@
                 });
 
                 for (let i = 0; i < framesPaths.length; i++) {
-                    await prepareModelScene(framesPaths[i]);
+                    await prepareModelScene(framesPaths[i], 0);
                     rotationWrapper.rotation.set(0, 0, 0);
                     renderer.render(scene, camera);
                     
@@ -1251,6 +1322,101 @@
             if (etaText) document.getElementById('eta-text').textContent = etaText;
             document.getElementById('progress-bar').style.width = percent + '%';
         };
+
+        async function getModelTextureAnimFrameCount(modelPath) {
+            let modelData;
+            try { modelData = await loadModelWithParentsFromZip(modelPath); } catch(e) { return 1; }
+            if (!modelData.textures) return 1;
+
+            let maxFrames = 1;
+            const resolveRef = (key) => {
+                let val = modelData.textures[key];
+                let attempts = 0;
+                while (val && val.startsWith('#') && attempts < 10) {
+                    val = modelData.textures[val.substring(1)];
+                    attempts++;
+                }
+                return val;
+            };
+
+            for (let key in modelData.textures) {
+                const finalPath = resolveRef(key);
+                if (!finalPath || finalPath.startsWith('#')) continue;
+
+                let namespace = 'minecraft', path = finalPath;
+                if (finalPath.includes(':')) { [namespace, path] = finalPath.split(':'); }
+                const texFilePng = `assets/${namespace}/textures/${path}` + (path.endsWith('.png') ? '' : '.png');
+                const mcmeta = getMcmeta(texFilePng);
+                if (mcmeta && mcmeta.animation) {
+                    if (mcmeta.animation.frames && mcmeta.animation.frames.length > 0) {
+                        maxFrames = Math.max(maxFrames, mcmeta.animation.frames.length);
+                    } else {
+                        const rawBytes = extractedFiles[texFilePng];
+                        if (rawBytes) {
+                            const count = await new Promise(resolve => {
+                                const blob = new Blob([rawBytes], { type: 'image/png' });
+                                const url = URL.createObjectURL(blob);
+                                const img = new Image();
+                                img.onload = () => {
+                                    URL.revokeObjectURL(url);
+                                    resolve(Math.max(1, Math.floor(img.height / img.width)));
+                                };
+                                img.onerror = () => { URL.revokeObjectURL(url); resolve(1); };
+                                img.src = url;
+                            });
+                            maxFrames = Math.max(maxFrames, count);
+                        }
+                    }
+                }
+            }
+            return maxFrames;
+        }
+
+        async function captureTextureAnimGif(modelPath, texFrameCount) {
+            return new Promise(async (resolve) => {
+                const gif = new GIF({
+                    workers: 2, quality: 1, width: CANVAS_SIZE, height: CANVAS_SIZE,
+                    workerScript: "gif.worker.js", transparent: 0x000000
+                });
+
+                let frametime = 1;
+                try {
+                    const modelData = await loadModelWithParentsFromZip(modelPath);
+                    if (modelData.textures) {
+                        for (let key in modelData.textures) {
+                            let val = modelData.textures[key];
+                            let attempts = 0;
+                            while (val && val.startsWith('#') && attempts < 10) { val = modelData.textures[val.substring(1)]; attempts++; }
+                            if (!val || val.startsWith('#')) continue;
+                            let namespace = 'minecraft', path = val;
+                            if (val.includes(':')) { [namespace, path] = val.split(':'); }
+                            const texFilePng = `assets/${namespace}/textures/${path}` + (path.endsWith('.png') ? '' : '.png');
+                            const mcmeta = getMcmeta(texFilePng);
+                            if (mcmeta && mcmeta.animation && mcmeta.animation.frametime) {
+                                frametime = mcmeta.animation.frametime;
+                                break;
+                            }
+                        }
+                    }
+                } catch(e) {}
+
+                const delayMs = frametime * 50;
+
+                for (let fi = 0; fi < texFrameCount; fi++) {
+                    await prepareModelScene(modelPath, fi);
+                    rotationWrapper.rotation.set(0, 0, 0);
+                    renderer.render(scene, camera);
+                    gif.addFrame(renderer.domElement, { copy: true, delay: delayMs });
+                }
+
+                gif.on("finished", function(blob) {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.readAsDataURL(blob);
+                });
+                gif.render();
+            });
+        }
 
         async function runRenderLoop(modelsList) {
             let total = modelsList.length;
@@ -1284,8 +1450,18 @@
 
                     if (item.type === 'single') {
                         cleanId = item.path.replace('assets/', '').replace(".json", "");
-                        await prepareModelScene(item.path);
-                        base64Image = RENDER_MODE === 'png' ? capturePng() : await captureSpinningGif();
+                        if (RENDER_MODE === 'gif') {
+                            const texFrameCount = await getModelTextureAnimFrameCount(item.path);
+                            if (texFrameCount > 1) {
+                                base64Image = await captureTextureAnimGif(item.path, texFrameCount);
+                            } else {
+                                await prepareModelScene(item.path, 0);
+                                base64Image = await captureSpinningGif();
+                            }
+                        } else {
+                            await prepareModelScene(item.path, 0);
+                            base64Image = capturePng();
+                        }
                         ext = RENDER_MODE === 'png' ? 'png' : 'gif';
                     } else {
                         cleanId = item.name.replace('assets/', '').replace(".json", "");
