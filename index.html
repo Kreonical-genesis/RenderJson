@@ -6,6 +6,7 @@
     <title>RenderJson</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         :root {
             --bg-base: #0f1115;
@@ -67,23 +68,10 @@
             outline: none;
             transition: border-color 0.2s;
         }
-        
-        select[multiple] {
-            padding: 4px;
-            height: 150px;
-        }
-        select[multiple] option {
-            padding: 6px 10px;
-            margin-bottom: 2px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        select[multiple] option:checked {
-            background: var(--accent);
-            color: white;
-        }
 
         input:focus, select:focus { border-color: var(--accent); }
+
+        .disabled-panel { opacity: 0.5; pointer-events: none; filter: grayscale(30%); transition: all 0.3s; }
 
         header {
             height: 60px;
@@ -109,7 +97,6 @@
             font-weight: bold;
             text-transform: uppercase;
             letter-spacing: 1px;
-            transition: background-color 0.3s;
         }
         .mode-badge.setup { background-color: #4b5563; }
         .mode-badge.gif { background-color: #d97706; }
@@ -164,11 +151,9 @@
 
         .form-group { display: flex; flex-direction: column; gap: 8px; }
         .form-group label { font-size: 0.9rem; color: var(--text-dim); font-weight: 500; }
-        
-        .disabled-panel { opacity: 0.5; pointer-events: none; filter: grayscale(30%); transition: all 0.3s; }
 
         .sidebar-setup {
-            width: 300px;
+            width: 320px;
             background: var(--bg-panel);
             border-right: 1px solid var(--border-color);
             display: flex;
@@ -187,6 +172,52 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
+        }
+
+        #drop-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius);
+            padding: 30px 20px;
+            text-align: center;
+            transition: all 0.2s;
+            cursor: pointer;
+            background: rgba(255,255,255,0.02);
+        }
+        #drop-zone:hover, #drop-zone.dragover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
+        #drop-zone svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 10px;
+            color: var(--text-dim);
+        }
+        #drop-zone p { color: var(--text-dim); font-size: 0.9rem; }
+        #drop-zone .highlight { color: var(--accent); }
+
+        #file-input { display: none; }
+
+        #loaded-packs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .pack-tag {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pack-tag .remove {
+            cursor: pointer;
+            color: var(--error);
+            font-weight: bold;
         }
 
         .sidebar-models {
@@ -312,7 +343,7 @@
         <div id="status-area">
             <div class="status-info">
                 <div id="status-text" style="color: var(--text-main); font-weight: normal; font-size: 0.95rem;">Готов к работе</div>
-                <div id="eta-text">by kreo_gen & mrlemonhog</div>
+                <div id="eta-text">Drag & Drop ZIP для загрузки</div>
             </div>
             <div id="progress-track"><div id="progress-bar"></div></div>
         </div>
@@ -322,15 +353,18 @@
         <aside class="sidebar-setup" id="step-1-2">
             
             <div class="tech-panel">
-                <div class="panel-header">1. Ресурспак</div>
+                <div class="panel-header">1. Загрузка ресурспаков</div>
                 <div class="panel-content">
-                    <div class="form-group">
-                        <label>Выберите .zip архив(ы) из /import</label>
-                        <div style="font-size: 0.75rem; color: var(--text-dim); margin-top: -4px;">Зажмите Ctrl/Shift для выбора нескольких</div>
-                        <select id="pack-select" multiple title="Используйте Ctrl / Shift для выделения нескольких">
-                            <option value="">Загрузка...</option>
-                        </select>
+                    <div id="drop-zone">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        <p><span class="highlight">Drag & Drop</span> ZIP файлы</p>
+                        <p style="font-size: 0.75rem; margin-top: 5px;">или нажмите для выбора</p>
+                        <input type="file" id="file-input" accept=".zip" multiple>
                     </div>
+                    
+                    <div id="loaded-packs"></div>
                 </div>
             </div>
 
@@ -348,13 +382,20 @@
                         <label>Разрешение (px)</label>
                         <input type="number" id="setting-size" value="800" min="100" max="2048">
                     </div>
+                    <div class="form-group" style="margin-top: 5px;">
+                        <label>Скачивание</label>
+                        <select id="setting-download">
+                            <option value="zip">ZIP архив (все вместе)</option>
+                            <option value="auto">Автоматически (по одному)</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             
             <div style="padding: 15px; border-top: 1px solid var(--border-color); background: var(--bg-panel); margin-top: auto; display: flex; justify-content: center;">
                 <button id="btn-extract" disabled style="width: 100%; padding: 12px 0; font-size: 1.05rem;">
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                    Распаковать архив
+                    Загрузить модели
                 </button>
             </div>
         </aside>
@@ -400,7 +441,7 @@
             <div id="log-section">
                 <div class="panel-header" style="background: transparent;">Логи процесса</div>
                 <div id="log-container">
-                    <div class="log-entry normal"><span class="time"></span>Система готова. Ожидание распаковки пака...</div>
+                    <div class="log-entry normal"><span class="time"></span>Система готова. Перетащите ZIP ресурспак...</div>
                 </div>
             </div>
         </section>
@@ -412,52 +453,146 @@
         
         let RENDER_MODE = "png";
         let CANVAS_SIZE = 800; 
+        let DOWNLOAD_MODE = "zip";
         let modelsToRender = [];
 
+        let loadedPacks = new Map();
+
         let scene, camera, renderer, mesh, rotationWrapper;
+        let extractedFiles = {};
 
-        window.onload = async () => {
-            try {
-                const res = await fetch('/api/packs');
-                const data = await res.json();
-                const select = document.getElementById('pack-select');
-                select.innerHTML = '';
-                
-                if (data.packs.length === 0) {
-                    select.innerHTML = '<option disabled selected>Папка /import пуста</option>';
-                    document.getElementById('btn-extract').disabled = true;
-                } else {
-                    data.packs.forEach(p => {
-                        select.innerHTML += `<option value="${p}">${p}</option>`;
-                    });
-                    select.addEventListener('change', handlePackSelectionChange);
-                    handlePackSelectionChange(); 
-                }
-            } catch (e) {
-                alert("Ошибка связи с сервером. Проверьте консоль.");
-            }
-        };
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
 
-        function handlePackSelectionChange() {
-            const select = document.getElementById('pack-select');
-            const selected = Array.from(select.selectedOptions).filter(o => o.value !== "");
-            const btn = document.getElementById('btn-extract');
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        async function handleFiles(files) {
+            const zipFiles = Array.from(files).filter(f => f.name.endsWith('.zip'));
             
-            if (selected.length === 0) {
-                btn.disabled = true;
-                btn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> Распаковать архив`;
+            if (zipFiles.length === 0) {
+                alert('Пожалуйста, выберите ZIP файлы');
                 return;
             }
-            btn.disabled = false;
 
-            if (selected.length > 1) {
-                btn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg> Авто-рендер всех (${selected.length})`;
-                btn.onclick = () => startMultiPackBatch(selected.map(o => o.value));
-                document.getElementById('step-3').classList.add('disabled-panel'); 
-            } else {
-                btn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> Распаковать архив`;
-                btn.onclick = () => extractPack();
+            for (const file of zipFiles) {
+                if (loadedPacks.has(file.name)) {
+                    log(`Пак ${file.name} уже загружен`, 'warn');
+                    continue;
+                }
+
+                log(`Загрузка ${file.name}...`);
+                
+                try {
+                    const zip = await JSZip.loadAsync(file);
+                    loadedPacks.set(file.name, zip);
+                    addPackTag(file.name);
+                    log(`Пак ${file.name} загружен (${Object.keys(zip.files).length} файлов)`, 'success');
+                } catch (e) {
+                    log(`Ошибка загрузки ${file.name}: ${e.message}`, 'error');
+                }
             }
+
+            updatePackButtons();
+        }
+
+        function addPackTag(name) {
+            const container = document.getElementById('loaded-packs');
+            const tag = document.createElement('div');
+            tag.className = 'pack-tag';
+            tag.innerHTML = `${name} <span class="remove" onclick="removePack('${name}')">&times;</span>`;
+            container.appendChild(tag);
+        }
+
+        function removePack(name) {
+            loadedPacks.delete(name);
+            document.getElementById('loaded-packs').innerHTML = '';
+            loadedPacks.forEach((_, name) => addPackTag(name));
+            updatePackButtons();
+            log(`Пак ${name} удален`, 'normal');
+        }
+
+        function updatePackButtons() {
+            const btn = document.getElementById('btn-extract');
+            if (loadedPacks.size > 0) {
+                btn.disabled = false;
+                btn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> Загрузить модели (${loadedPacks.size})`;
+            } else {
+                btn.disabled = true;
+                btn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> Загрузить модели`;
+            }
+        }
+
+        document.getElementById('btn-extract').addEventListener('click', extractAllPacks);
+
+        async function extractAllPacks() {
+            const btn = document.getElementById('btn-extract');
+            btn.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Распаковка...';
+            btn.disabled = true;
+
+            extractedFiles = {};
+            let allModels = [];
+
+            for (const [packName, zip] of loadedPacks) {
+                log(`Распаковка ${packName}...`);
+                
+                const fileEntries = Object.entries(zip.files);
+                const totalFiles = fileEntries.length;
+                let processed = 0;
+                
+                for (const [fileName, zipEntry] of fileEntries) {
+                    processed++;
+                    if (processed % 500 === 0) {
+                        log(`Загрузка файлов: ${processed}/${totalFiles}...`, 'normal');
+                    }
+                    
+                    if (zipEntry.dir) continue;
+                    
+                    if (fileName.endsWith('.json')) {
+                        const content = await zipEntry.async('string');
+                        extractedFiles[fileName] = new TextEncoder().encode(content);
+                        
+                        if (fileName.includes('/models/')) {
+                            allModels.push(fileName);
+                        }
+                    } else {
+                        extractedFiles[fileName] = await zipEntry.async('uint8array');
+                    }
+                }
+                
+                log(`Обработано ${Object.keys(extractedFiles).length} файлов из ${packName}`, 'success');
+            }
+
+            availableModels = processRawModelsIntoGroups(allModels);
+            selectedModels = new Set(availableModels.map(m => m.id));
+            
+            renderModelList();
+            
+            btn.innerHTML = '✔ Загружено';
+            document.getElementById('step-3').classList.remove('disabled-panel');
+            document.getElementById('btn-start').classList.remove('disabled-panel');
+            
+            log(`Всего найдено объектов: ${availableModels.length}`, 'success');
+
+            setTimeout(() => updatePackButtons(), 2000);
         }
 
         function processRawModelsIntoGroups(rawPaths) {
@@ -488,14 +623,14 @@
                     processed.push({
                         id: 'grp_' + btoa(base).replace(/=/g, ''),
                         type: 'group',
-                        name: base.replace('temp_pack/assets/', ''),
+                        name: base.replace('assets/', ''),
                         frames: paths
                     });
                 } else {
                     processed.push({
                         id: paths[0],
                         type: 'single',
-                        name: paths[0].replace('temp_pack/assets/', ''),
+                        name: paths[0].replace('assets/', ''),
                         path: paths[0]
                     });
                 }
@@ -534,43 +669,6 @@
 
             log(`Вручную создана анимация '${groupName}' из ${frames.length} кадров.`, 'warn');
             renderModelList(document.getElementById('model-search').value.toLowerCase());
-        }
-
-        async function extractPack() {
-            const select = document.getElementById('pack-select');
-            if (select.selectedOptions.length === 0) return;
-            const pack = select.selectedOptions[0].value;
-
-            const btn = document.getElementById('btn-extract');
-            btn.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Распаковка...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/extract', {
-                    method: 'POST',
-                    body: JSON.stringify({ pack })
-                });
-                const data = await res.json();
-                
-                availableModels = processRawModelsIntoGroups(data.models || []);
-                
-                selectedModels = new Set(availableModels.map(m => m.id));
-                
-                renderModelList();
-                
-                btn.innerHTML = '✔ Загружено';
-                document.getElementById('step-3').classList.remove('disabled-panel');
-                document.getElementById('btn-start').classList.remove('disabled-panel');
-                
-                log(`Пак ${pack} успешно распакован. Найдено объектов: ${availableModels.length}`, 'success');
-
-                setTimeout(() => handlePackSelectionChange(), 2000);
-
-            } catch(e) {
-                alert("Ошибка при распаковке архива.");
-                handlePackSelectionChange(); 
-                log(`Ошибка распаковки: ${e.message}`, 'error');
-            }
         }
 
         function filterModels() {
@@ -691,17 +789,6 @@
             camera.updateProjectionMatrix();
         }
 
-        function resolveTextureUrl(texturePath) {
-            let namespace = 'minecraft';
-            let path = texturePath;
-            if (texturePath.includes(':')) {
-                const parts = texturePath.split(':');
-                namespace = parts[0];
-                path = parts[1];
-            }
-            return `temp_pack/assets/${namespace}/textures/${path}.png`;
-        }
-
         async function loadModelTextures(model) {
             const textureMap = {};
             const loader = new THREE.TextureLoader();
@@ -746,34 +833,64 @@
                     if (finalPath.startsWith('items_displayed:')) {
                         const cleanName = finalPath.split(':')[1];
                         const fullPath = contextNamespace + ":" + contextDir + cleanName;
-                        url = resolveTextureUrl(fullPath);
+                        url = resolveTextureUrlFromZip(fullPath);
                     } else {
-                        url = resolveTextureUrl(finalPath);
+                        url = resolveTextureUrlFromZip(finalPath);
                     }
 
-                    promises.push(new Promise((resolve) => {
-                        loader.load(url, (tex) => {
-                            tex.magFilter = THREE.NearestFilter;
-                            tex.minFilter = THREE.NearestFilter;
-                            tex.colorSpace = THREE.SRGBColorSpace;
-                            textureMap['#' + key] = tex;
-                            resolve();
-                        }, undefined, () => {
-                            resolve();
-                        });
-                    }));
+                    if (url) {
+                        promises.push(new Promise((resolve) => {
+                            loader.load(url, (tex) => {
+                                tex.magFilter = THREE.NearestFilter;
+                                tex.minFilter = THREE.NearestFilter;
+                                tex.colorSpace = THREE.SRGBColorSpace;
+                                textureMap['#' + key] = tex;
+                                resolve();
+                            }, undefined, () => {
+                                resolve();
+                            });
+                        }));
+                    }
                 }
             }
             await Promise.all(promises);
             return textureMap;
         }
-        
-        async function loadModelWithParents(modelPath, depth = 0) {
-            if (depth > 10) throw new Error("limit reached");
 
-            const response = await fetch(modelPath);
-            if (!response.ok) throw new Error("Model not found");
-            const model = await response.json();
+        function resolveTextureUrlFromZip(texturePath) {
+            let namespace = 'minecraft';
+            let path = texturePath;
+            if (texturePath.includes(':')) {
+                const parts = texturePath.split(':');
+                namespace = parts[0];
+                path = parts[1];
+            }
+            
+            const textureFile = `assets/${namespace}/textures/${path}`;
+            
+            if (extractedFiles[textureFile]) {
+                const isPng = textureFile.endsWith('.png') || textureFile.endsWith('.png');
+                const blob = new Blob([extractedFiles[textureFile]], { type: isPng ? 'image/png' : 'image/png' });
+                return URL.createObjectURL(blob);
+            }
+            
+            const textureFilePng = textureFile + '.png';
+            if (extractedFiles[textureFilePng]) {
+                const blob = new Blob([extractedFiles[textureFilePng]], { type: 'image/png' });
+                return URL.createObjectURL(blob);
+            }
+            
+            return null;
+        }
+
+        async function loadModelWithParentsFromZip(modelPath, depth = 0) {
+            if (depth > 10) throw new Error("Слишком много вложений");
+
+            const modelContent = extractedFiles[modelPath];
+            if (!modelContent) throw new Error("Модель не найдена: " + modelPath);
+            
+            const decoder = new TextDecoder('utf-8');
+            const model = JSON.parse(decoder.decode(modelContent));
 
             if (
                 model.parent === "item/generated" ||
@@ -789,12 +906,12 @@
 
             if (parent.includes(":")) {
                 const [namespace, path] = parent.split(":");
-                parentPath = `temp_pack/assets/${namespace}/models/${path}.json`;
+                parentPath = `assets/${namespace}/models/${path}.json`;
             } else {
-                parentPath = `temp_pack/assets/minecraft/models/${parent}.json`;
+                parentPath = `assets/minecraft/models/${parent}.json`;
             }
 
-            const parentModel = await loadModelWithParents(parentPath, depth + 1);
+            const parentModel = await loadModelWithParentsFromZip(parentPath, depth + 1);
 
             return {
                 ...parentModel,
@@ -1025,9 +1142,9 @@
         async function prepareModelScene(modelPath) {
             let modelData;
             try {
-                modelData = await loadModelWithParents(modelPath);
+                modelData = await loadModelWithParentsFromZip(modelPath);
             } catch (e) {
-                throw new Error(`Load error: ${e.message}`);
+                throw new Error(`Ошибка загрузки: ${e.message}`);
             }
 
             if (mesh) {
@@ -1106,7 +1223,7 @@
 
                 for (let i = 0; i < framesPaths.length; i++) {
                     await prepareModelScene(framesPaths[i]);
-                    rotationWrapper.rotation.set(0, 0, 0); 
+                    rotationWrapper.rotation.set(0, 0, 0);
                     renderer.render(scene, camera);
                     
                     gif.addFrame(renderer.domElement, { copy: true, delay: 250 });
@@ -1135,10 +1252,12 @@
             document.getElementById('progress-bar').style.width = percent + '%';
         };
 
-        async function runRenderLoop(modelsList, packName = "") {
+        async function runRenderLoop(modelsList) {
             let total = modelsList.length;
             let processed = 0;
             const startTime = Date.now();
+            
+            const resultsZip = DOWNLOAD_MODE === 'zip' ? new JSZip() : null;
 
             for (let item of modelsList) {
                 processed++;
@@ -1156,53 +1275,66 @@
                     etaString = `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
                 }
 
-                const prefix = packName ? `[${packName}] ` : "";
-                updateStatus(`${prefix}Рендер ${processed} из ${total}`, (processed/total)*100, `Осталось: ~${etaString}`);
+                updateStatus(`Рендер ${processed} из ${total}`, (processed/total)*100, `Осталось: ~${etaString}`);
 
                 try {
                     let base64Image;
                     let cleanId;
+                    let ext;
 
                     if (item.type === 'single') {
-                        cleanId = item.path.replace('temp_pack/assets/', '').replace(".json", "");
+                        cleanId = item.path.replace('assets/', '').replace(".json", "");
                         await prepareModelScene(item.path);
                         base64Image = RENDER_MODE === 'png' ? capturePng() : await captureSpinningGif();
+                        ext = RENDER_MODE === 'png' ? 'png' : 'gif';
                     } else {
-                        cleanId = item.name.replace('temp_pack/assets/', '').replace(".json", "");
+                        cleanId = item.name.replace('assets/', '').replace(".json", "");
                         if (RENDER_MODE === 'png') {
                             await prepareModelScene(item.frames[0]);
                             base64Image = capturePng();
+                            ext = 'png';
                         } else {
                             base64Image = await captureSequenceGif(item.frames);
+                            ext = 'gif';
                         }
                     }
 
-                    if (packName) {
-                        const pName = packName.replace('.zip', '');
-                        cleanId = `${pName}/${cleanId}`;
-                    }
+                    const fileName = `${cleanId}.${ext}`;
                     
-                    await fetch('/upload_image', {
-                        method: 'POST',
-                        body: JSON.stringify({ 
-                            id: cleanId,
-                            image: base64Image,
-                            mode: RENDER_MODE
-                        })
-                    });
+                    if (DOWNLOAD_MODE === 'zip') {
+                        const base64Data = base64Image.split(',')[1];
+                        resultsZip.file(fileName, base64Data, { base64: true });
+                    } else {
+                        const link = document.createElement('a');
+                        link.href = base64Image;
+                        link.download = fileName;
+                        link.click();
+                        await new Promise(r => setTimeout(r, 100));
+                    }
 
-                    log(`Успешно: ${cleanId}`, "success");
+                    log(`Успешно: ${cleanId}.${ext}`, "success");
                 } catch (e) {
                     log(`Ошибка (${item.name || item.path}): ${e.message}`, "error");
                 }
 
                 await new Promise(r => setTimeout(r, 30));
             }
+
+            if (DOWNLOAD_MODE === 'zip' && resultsZip) {
+                log('Создание ZIP архива...', 'normal');
+                const blob = await resultsZip.generateAsync({ type: 'blob' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `renders_${Date.now()}.zip`;
+                link.click();
+                log('Архив скачан!', 'success');
+            }
         }
 
         async function startBatchProcess() {
             RENDER_MODE = document.getElementById('setting-mode').value;
             CANVAS_SIZE = parseInt(document.getElementById('setting-size').value) || 800;
+            DOWNLOAD_MODE = document.getElementById('setting-download').value;
             
             modelsToRender = availableModels.filter(m => selectedModels.has(m.id));
 
@@ -1213,7 +1345,7 @@
             badge.textContent = (RENDER_MODE === 'gif' ? 'GIF' : 'IMG') + ' MODE';
             badge.className = 'mode-badge ' + (RENDER_MODE === 'gif' ? 'gif' : 'png');
 
-            document.getElementById('progress-track').style.visibility = 'visible';
+            document.getElementById('progress-track').style.display = 'block';
             document.getElementById('progress-bar').style.width = '0%';
             document.getElementById('progress-bar').style.background = 'var(--success)';
             document.getElementById('log-container').innerHTML = '';
@@ -1223,10 +1355,7 @@
             
             log(`Начат рендер ${modelsToRender.length} элементов...`);
             
-            const select = document.getElementById('pack-select');
-            const packName = select.selectedOptions.length > 0 ? select.selectedOptions[0].value : "";
-
-            await runRenderLoop(modelsToRender, packName);
+            await runRenderLoop(modelsToRender);
 
             updateStatus('Готово', 100, 'Завершено');
             document.getElementById('progress-bar').style.background = '#10b981';
@@ -1234,61 +1363,6 @@
             
             document.getElementById('step-1-2').classList.remove('disabled-panel');
             document.getElementById('step-3').classList.remove('disabled-panel');
-        }
-
-        async function startMultiPackBatch(packs) {
-            RENDER_MODE = document.getElementById('setting-mode').value;
-            CANVAS_SIZE = parseInt(document.getElementById('setting-size').value) || 800;
-            
-            document.getElementById('step-1-2').classList.add('disabled-panel');
-            document.getElementById('step-3').classList.add('disabled-panel');
-            
-            const badge = document.getElementById('mode-badge');
-            badge.textContent = (RENDER_MODE === 'gif' ? 'GIF' : 'IMG') + ' BATCH';
-            badge.className = 'mode-badge ' + (RENDER_MODE === 'gif' ? 'gif' : 'png');
-
-            document.getElementById('progress-track').style.visibility = 'visible';
-            document.getElementById('progress-bar').style.width = '0%';
-            document.getElementById('progress-bar').style.background = 'var(--success)';
-            document.getElementById('log-container').innerHTML = '';
-
-            initScene();
-            if (renderer) renderer.setSize(CANVAS_SIZE, CANVAS_SIZE);
-            
-            log(`Начат автоматический пакетный рендер ${packs.length} ресурспаков...`, 'success');
-
-            for (let i = 0; i < packs.length; i++) {
-                const pack = packs[i];
-                log(`[${i+1}/${packs.length}] Распаковка ${pack}...`);
-                updateStatus(`Распаковка ${pack}...`, (i / packs.length) * 100, `Ожидание`);
-                
-                try {
-                    const res = await fetch('/api/extract', {
-                        method: 'POST',
-                        body: JSON.stringify({ pack })
-                    });
-                    const data = await res.json();
-                    
-                    const models = processRawModelsIntoGroups(data.models || []);
-                    
-                    if (models.length === 0) {
-                         log(`[${pack}] Нет моделей для рендера. Пропуск.`, 'normal');
-                         continue;
-                    }
-
-                    log(`[${pack}] Найдено ${models.length} объектов для рендера. Запуск...`);
-                    await runRenderLoop(models, pack);
-
-                } catch (e) {
-                    log(`[${pack}] Ошибка распаковки: ${e.message}`, 'error');
-                }
-            }
-
-            updateStatus('Готово', 100, 'Все паки завершены');
-            document.getElementById('progress-bar').style.background = '#10b981';
-            log('Пакетный рендер всех выбранных паков завершен!', 'success');
-            
-            document.getElementById('step-1-2').classList.remove('disabled-panel');
         }
     </script>
 </body>
