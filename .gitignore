@@ -1,6 +1,4 @@
 /.venv
-/import/*
-/assets/*
-/temp_pack/*
-models_list.json
-render_tool.html
+/import
+/assets
+/temp_pack

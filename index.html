@@ -58,7 +58,7 @@
         button:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
         button:disabled { background: #374151; color: #9ca3af; cursor: not-allowed; transform: none; }
         
-        input[type="text"], input[type="number"], select {
+        input[type="text"], input[type="number"], input[type="range"], select {
             width: 100%;
             background: var(--bg-input);
             border: 1px solid var(--border-color);
@@ -67,6 +67,23 @@
             border-radius: var(--radius);
             outline: none;
             transition: border-color 0.2s;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 6px;
+            padding: 0;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
         }
 
         input:focus, select:focus { border-color: var(--accent); }
@@ -151,6 +168,8 @@
 
         .form-group { display: flex; flex-direction: column; gap: 8px; }
         .form-group label { font-size: 0.9rem; color: var(--text-dim); font-weight: 500; }
+        #camera-panel .form-group { gap: 4px; }
+        #camera-panel .form-group label { font-size: 0.7rem; font-weight: normal; }
 
         .sidebar-setup {
             width: 320px;
@@ -326,6 +345,18 @@
             flex-direction: column;
             background: #000;
             min-width: 0;
+            position: relative;
+        }
+
+        #camera-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 260px;
+            z-index: 100;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
         }
 
         #render-section {
@@ -493,13 +524,45 @@
 
         <section class="render-workspace">
             <div id="render-section">
+                <div id="camera-panel" style="border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;">
+                    <div class="panel-header" style="background: rgba(0,0,0,0.3); display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: none;">
+                        <span style="font-size: 0.7rem;">КАМЕРА</span>
+                        <button id="btn-preview-camera" class="btn btn-small" style="padding: 2px 8px; font-size: 0.65rem;">Применить</button>
+                    </div>
+                    <div class="panel-content" style="padding: 10px; gap: 8px;">
+                        <div class="camera-controls" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;">
+                            <div class="form-group">
+                                <label style="font-size: 0.7rem;">X: <span id="cam-pos-x-val">0</span></label>
+                                <input type="range" id="cam-pos-x" min="-50" max="50" value="0" step="1" style="padding: 0;">
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 0.7rem;">Y: <span id="cam-pos-y-val">30</span></label>
+                                <input type="range" id="cam-pos-y" min="-50" max="50" value="30" step="1" style="padding: 0;">
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 0.7rem;">Z: <span id="cam-pos-z-val">30</span></label>
+                                <input type="range" id="cam-pos-z" min="-50" max="50" value="30" step="1" style="padding: 0;">
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 0.7rem;">Zoom: <span id="cam-zoom-val">1.0</span></label>
+                                <input type="range" id="cam-zoom" min="0.1" max="3" value="1" step="0.1" style="padding: 0;">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <select id="camera-model-select" style="padding: 6px; font-size: 0.75rem;">
+                                <option value="">-- Модель --</option>
+                            </select>
+                        </div>
+                        <button id="btn-render-preview" class="btn" style="padding: 6px; font-size: 0.75rem;">Превью</button>
+                    </div>
+                </div>
                 <div id="canvas-wrapper">
                     <div id="canvas-container"></div>
                 </div>
             </div>
             
             <div id="log-section">
-                <div class="panel-header" style="background: transparent;">Логи процесса</div>
+                <div class="panel-header" style="background: transparent;">Логи</div>
                 <div id="log-container">
                     <div class="log-entry normal"><span class="time"></span>Система готова. Перетащите ZIP ресурспак...</div>
                 </div>
@@ -512,6 +575,15 @@
         let selectedModels = new Set();
         let modelPreviews = {};
         
+        let cameraSettings = {
+            posX: 0,
+            posY: 30,
+            posZ: 30,
+            rotX: 25,
+            rotY: 45,
+            zoom: 1.0
+        };
+        
         let RENDER_MODE = "png";
         let PREVIEW_SIZE = 100;
         let CANVAS_SIZE = 800;
@@ -523,6 +595,8 @@
         let scene, camera, renderer, mesh, rotationWrapper;
         let extractedFiles = {};
         let mcmetaCache = {}; // path -> parsed mcmeta JSON
+
+        initCameraControls();
 
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
@@ -547,6 +621,146 @@
         fileInput.addEventListener('change', (e) => {
             handleFiles(e.target.files);
         });
+
+        function initCameraControls() {
+            document.getElementById('cam-pos-x').value = cameraSettings.posX;
+            document.getElementById('cam-pos-x-val').textContent = cameraSettings.posX;
+            document.getElementById('cam-pos-y').value = cameraSettings.posY;
+            document.getElementById('cam-pos-y-val').textContent = cameraSettings.posY;
+            document.getElementById('cam-pos-z').value = cameraSettings.posZ;
+            document.getElementById('cam-pos-z-val').textContent = cameraSettings.posZ;
+            document.getElementById('cam-zoom').value = cameraSettings.zoom;
+            document.getElementById('cam-zoom-val').textContent = cameraSettings.zoom;
+            
+            const controls = ['cam-pos-x', 'cam-pos-y', 'cam-pos-z', 'cam-zoom'];
+            controls.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('input', (e) => {
+                        let value = parseFloat(e.target.value);
+                        
+                        if (id === 'cam-pos-x') cameraSettings.posX = value;
+                        if (id === 'cam-pos-y') cameraSettings.posY = value;
+                        if (id === 'cam-pos-z') cameraSettings.posZ = value;
+                        if (id === 'cam-zoom') cameraSettings.zoom = value;
+                        
+                        const valEl = document.getElementById(id + '-val');
+                        if (valEl) valEl.textContent = value;
+                        
+                        updateCameraFromSettings();
+                    });
+                }
+            });
+            
+            document.getElementById('btn-render-preview')?.addEventListener('click', renderCameraPreview);
+            document.getElementById('btn-preview-camera')?.addEventListener('click', applyCameraToSelected);
+        }
+
+        function updateCameraFromSettings() {
+            if (!camera) return;
+            
+            camera.position.set(cameraSettings.posX, cameraSettings.posY, cameraSettings.posZ);
+            camera.lookAt(0, 0, 0);
+            camera.zoom = cameraSettings.zoom;
+            camera.updateProjectionMatrix();
+            
+            if (renderer && scene && mesh) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        async function renderCameraPreview() {
+            const select = document.getElementById('camera-model-select');
+            const modelPath = select.value;
+            
+            if (!modelPath) {
+                alert('Выберите модель для превью');
+                return;
+            }
+            
+            initScene();
+            
+            if (mesh) {
+                scene.remove(mesh);
+                mesh.traverse(obj => {
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) {
+                        if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                        else obj.material.dispose();
+                    }
+                });
+            }
+            
+            try {
+                const modelData = await loadModelWithParentsFromZip(modelPath);
+                
+                let newMesh;
+                if (modelData.parent === "item/generated" || !modelData.elements) {
+                    newMesh = await createGeneratedModel(modelData, 0);
+                } else {
+                    newMesh = await createGeometryFromModel(modelData, 0);
+                }
+                
+                mesh = newMesh;
+                scene.add(mesh);
+                
+                const box = new THREE.Box3().setFromObject(mesh);
+                const size = box.getSize(new THREE.Vector3());
+                const center = box.getCenter(new THREE.Vector3());
+                
+                mesh.position.x -= center.x;
+                mesh.position.y -= center.y;
+                mesh.position.z -= center.z;
+                
+                const maxDim = Math.max(size.x, size.y, size.z);
+                camera.zoom = (2 / (maxDim || 1)) * 0.8 * cameraSettings.zoom;
+                camera.updateProjectionMatrix();
+                
+                camera.position.set(cameraSettings.posX, cameraSettings.posY, cameraSettings.posZ);
+                camera.lookAt(0, 0, 0);
+                
+                renderer.render(scene, camera);
+                
+                log(`Превью модели отрендерено`, 'success');
+            } catch (e) {
+                console.error('Preview error:', e);
+                log(`Ошибка рендеринга: ${e.message}`, 'error');
+            }
+        }
+
+        function applyCameraToSelected() {
+            if (selectedModels.size === 0) {
+                alert('Выберите модели для рендера');
+                return;
+            }
+            
+            log(`Применены настройки камеры к ${selectedModels.size} моделям`, 'success');
+            
+            const modelSelect = document.getElementById('camera-model-select');
+            const currentModel = modelSelect.value;
+            
+            if (currentModel) {
+                renderCameraPreview();
+            }
+        }
+
+        function updateCameraModelSelect() {
+            const select = document.getElementById('camera-model-select');
+            if (!select) return;
+            
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">-- Выберите модель --</option>';
+            
+            const singles = availableModels.filter(m => m.type === 'single');
+            singles.forEach(m => {
+                const option = document.createElement('option');
+                option.value = m.path;
+                option.textContent = m.name.replace('.json', '').split('/').pop();
+                select.appendChild(option);
+            });
+            
+            if (currentValue) select.value = currentValue;
+        }
 
         async function handleFiles(files) {
             const zipFiles = Array.from(files).filter(f => f.name.endsWith('.zip'));
@@ -664,6 +878,7 @@
             setTimeout(() => updatePackButtons(), 2000);
             
             renderAllPreviews(availableModels);
+            updateCameraModelSelect();
         }
 
         function processRawModelsIntoGroups(rawPaths) {
