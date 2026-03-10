@@ -246,19 +246,79 @@
         .model-item {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 12px;
-            border-radius: 4px;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 6px;
             cursor: pointer;
-            transition: background 0.1s;
+            transition: all 0.15s ease;
             background: rgba(255,255,255,0.02);
             border: 1px solid rgba(255,255,255,0.05);
-            margin-bottom: 6px;
+            margin-bottom: 8px;
         }
-        .model-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
-        .model-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
-        .model-item span { font-size: 0.85rem; word-break: break-all; }
-        .model-item.is-group { background: rgba(99, 102, 241, 0.05); border-color: rgba(99, 102, 241, 0.2); }
+        .model-item:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15); transform: translateX(2px); }
+        .model-item:hover .model-info { gap: 8px; }
+        .model-item:hover .model-name { font-size: 1rem; }
+        .model-item:hover .model-path { font-size: 0.85rem; }
+        .model-item.selected { background: rgba(99, 102, 241, 0.15); border-color: var(--accent); }
+        .model-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; position: relative; z-index: 10; }
+        .model-preview {
+            width: 60px;
+            height: 60px;
+            border-radius: 4px;
+            background: #0a0a0a;
+            background-image: linear-gradient(45deg, #111 25%, transparent 25%), linear-gradient(-45deg, #111 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #111 75%), linear-gradient(-45deg, transparent 75%, #111 75%);
+            background-size: 10px 10px;
+            background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+        .model-item:hover .model-preview {
+            width: 100px;
+            height: 100px;
+            position: relative;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .model-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transition: transform 0.2s ease;
+        }
+        .model-item:hover .model-preview img {
+            transform: scale(3);
+        }
+        .model-preview.loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .model-preview .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .model-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+        .model-name { font-size: 0.85rem; word-break: break-all; color: var(--text-main); }
+        .model-name .badge { 
+            font-size: 0.7rem; 
+            padding: 2px 6px; 
+            border-radius: 3px; 
+            margin-left: 8px; 
+            background: rgba(99, 102, 241, 0.2); 
+            color: #a5b4fc;
+        }
+        .model-path { font-size: 0.7rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .model-item.is-group { background: rgba(99, 102, 241, 0.08); border-color: rgba(99, 102, 241, 0.25); }
 
         .render-workspace {
             flex: 1;
@@ -450,9 +510,11 @@
     <script>
         let availableModels = [];
         let selectedModels = new Set();
+        let modelPreviews = {};
         
         let RENDER_MODE = "png";
-        let CANVAS_SIZE = 800; 
+        let PREVIEW_SIZE = 100;
+        let CANVAS_SIZE = 800;
         let DOWNLOAD_MODE = "zip";
         let modelsToRender = [];
 
@@ -600,6 +662,8 @@
             log(`Всего найдено объектов: ${availableModels.length}`, 'success');
 
             setTimeout(() => updatePackButtons(), 2000);
+            
+            renderAllPreviews(availableModels);
         }
 
         function processRawModelsIntoGroups(rawPaths) {
@@ -715,28 +779,59 @@
             const filtered = filter ? availableModels.filter(m => m.name.toLowerCase().includes(filter)) : availableModels;
 
             filtered.forEach(m => {
-                const label = document.createElement('label');
-                label.className = 'model-item' + (m.type === 'group' ? ' is-group' : '');
+                const label = document.createElement('div');
+                label.className = 'model-item' + (m.type === 'group' ? ' is-group' : '') + (selectedModels.has(m.id) ? ' selected' : '');
+                label.dataset.modelId = m.id;
+                label.onclick = (e) => {
+                    const cb = label.querySelector('input[type="checkbox"]');
+                    cb.checked = !cb.checked;
+                    if (cb.checked) selectedModels.add(m.id);
+                    else selectedModels.delete(m.id);
+                    label.classList.toggle('selected', selectedModels.has(m.id));
+                    updateSelectedCount();
+                };
                 
                 const cb = document.createElement('input');
                 cb.type = 'checkbox';
                 cb.value = m.id;
                 cb.checked = selectedModels.has(m.id);
-                cb.onchange = (e) => {
-                    if (e.target.checked) selectedModels.add(m.id);
-                    else selectedModels.delete(m.id);
-                    updateSelectedCount();
-                };
 
-                const span = document.createElement('span');
-                if (m.type === 'group') {
-                    span.innerHTML = `<strong>[📁 Анимация (${m.frames.length} кадр.)]</strong> ${m.name}`;
+                const previewDiv = document.createElement('div');
+                previewDiv.className = 'model-preview';
+                
+                const previewImg = modelPreviews[m.id];
+                if (previewImg) {
+                    const img = document.createElement('img');
+                    img.src = previewImg;
+                    previewDiv.appendChild(img);
                 } else {
-                    span.textContent = m.name.replace('.json', '');
+                    previewDiv.classList.add('loading');
+                    const spinner = document.createElement('div');
+                    spinner.className = 'spinner';
+                    previewDiv.appendChild(spinner);
                 }
 
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'model-info';
+                
+                const nameSpan = document.createElement('div');
+                nameSpan.className = 'model-name';
+                if (m.type === 'group') {
+                    nameSpan.innerHTML = `<strong>Анимация</strong><span class="badge">${m.frames.length} кадр.</span>`;
+                } else {
+                    nameSpan.textContent = m.name.replace('.json', '').split('/').pop();
+                }
+                
+                const pathSpan = document.createElement('div');
+                pathSpan.className = 'model-path';
+                pathSpan.textContent = m.name;
+
+                infoDiv.appendChild(nameSpan);
+                infoDiv.appendChild(pathSpan);
+
                 label.appendChild(cb);
-                label.appendChild(span);
+                label.appendChild(previewDiv);
+                label.appendChild(infoDiv);
                 frag.appendChild(label);
             });
             
@@ -778,12 +873,161 @@
             scene.add(topLight);
         }
 
-        function fitCameraToMesh(targetMesh) {
+        function initPreviewScene() {
+            if (window.previewRenderer) return;
+            
+            const PREVIEW_SIZE = 100;
+            
+            window.previewScene = new THREE.Scene();
+            
+            const aspect = 1;
+            const frustumSize = 10;
+            window.previewCamera = new THREE.OrthographicCamera(
+                -frustumSize * aspect / 2,
+                frustumSize * aspect / 2,
+                frustumSize / 2,
+                -frustumSize / 2,
+                0.1,
+                1000
+            );
+            
+            const distance = 20;
+            const angleY = 225 * Math.PI / 180;
+            const angleX = 30 * Math.PI / 180;
+            
+            window.previewCamera.position.set(
+                distance * Math.sin(angleY) * Math.cos(angleX),
+                distance * Math.sin(angleX),
+                distance * Math.cos(angleY)
+            );
+            window.previewCamera.lookAt(0, 0, 0);
+
+            window.previewRenderer = new THREE.WebGLRenderer({ 
+                antialias: false, 
+                alpha: true, 
+                preserveDrawingBuffer: true
+            });
+            window.previewRenderer.setSize(PREVIEW_SIZE, PREVIEW_SIZE);
+            window.previewRenderer.setClearColor(0x000000, 0);
+            
+            window.previewScene.add(new THREE.AmbientLight(0xffffff, 0.9));
+            const previewLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            previewLight.position.set(5, 20, 5);
+            window.previewScene.add(previewLight);
+        }
+
+        async function generatePreview(modelPath) {
+            initPreviewScene();
+            
+            let modelData;
+            try {
+                modelData = await loadModelWithParentsFromZip(modelPath);
+            } catch (e) {
+                console.error('Failed to load model:', modelPath, e);
+                return null;
+            }
+
+            let previewMesh;
+            if (modelData.parent === "item/generated" || !modelData.elements) {
+                previewMesh = await createGeneratedModel(modelData, 0);
+            } else {
+                previewMesh = await createGeometryFromModel(modelData, 0);
+            }
+
+            if (!previewMesh) {
+                console.error('Failed to create mesh for:', modelPath);
+                return null;
+            }
+
+            const wrapper = new THREE.Group();
+            wrapper.add(previewMesh);
+            window.previewScene.add(wrapper);
+            
+            fitCameraToMesh(previewMesh, true);
+            
+            window.previewRenderer.render(window.previewScene, window.previewCamera);
+            const dataUrl = window.previewRenderer.domElement.toDataURL("image/png");
+            
+            if (!dataUrl || dataUrl === 'data:,') {
+                console.error('Failed to generate preview for:', modelPath);
+            }
+            
+            window.previewScene.remove(wrapper);
+            wrapper.traverse(obj => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                }
+            });
+            
+            return dataUrl;
+        }
+
+        async function generateGroupPreview(framePaths) {
+            if (!framePaths || framePaths.length === 0) return null;
+            return generatePreview(framePaths[0]);
+        }
+
+        async function renderAllPreviews(models) {
+            log(`Генерация превью для ${models.length} моделей...`, 'normal');
+            const batchSize = 5;
+            let processed = 0;
+            
+            for (let model of models) {
+                processed++;
+                if (processed % 10 === 0) {
+                    log(`Превью: ${processed}/${models.length}`, 'normal');
+                }
+                
+                const modelId = model.id;
+                let preview = null;
+                
+                try {
+                    if (model.type === 'single') {
+                        preview = await generatePreview(model.path);
+                    } else {
+                        preview = await generateGroupPreview(model.frames);
+                    }
+                } catch (e) {
+                    console.error(`Preview error for ${modelId}:`, e);
+                }
+                
+                modelPreviews[modelId] = preview;
+                updatePreviewInList(modelId, preview);
+                
+                await new Promise(r => setTimeout(r, 10));
+            }
+            
+            log('Генерация превью завершена', 'success');
+        }
+
+        function updatePreviewInList(modelId, preview) {
+            const existingPreview = document.querySelector(`[data-model-id="${modelId}"] .model-preview`);
+            if (!existingPreview) return;
+            
+            existingPreview.classList.remove('loading');
+            existingPreview.innerHTML = '';
+            
+            if (preview) {
+                const img = document.createElement('img');
+                img.src = preview;
+                existingPreview.appendChild(img);
+            } else {
+                console.warn('No preview generated for model:', modelId);
+            }
+        }
+
+        function fitCameraToMesh(targetMesh, isPreview = false) {
             const box = new THREE.Box3().setFromObject(targetMesh);
             const size = box.getSize(new THREE.Vector3());
             const center = box.getCenter(new THREE.Vector3());
 
-            if (rotationWrapper) {
+            if (isPreview) {
+                targetMesh.position.x -= center.x;
+                targetMesh.position.y -= center.y;
+                targetMesh.position.z -= center.z;
+            } else if (rotationWrapper) {
                 rotationWrapper.position.set(-center.x, -center.y, -center.z);
             } else {
                 targetMesh.position.x -= center.x;
@@ -792,8 +1036,9 @@
             }
 
             const maxDim = Math.max(size.x, size.y, size.z);
-            camera.zoom = (2 / (maxDim || 1)) * 0.8; 
-            camera.updateProjectionMatrix();
+            const cam = isPreview ? window.previewCamera : camera;
+            cam.zoom = (2 / (maxDim || 1)) * 0.8; 
+            cam.updateProjectionMatrix();
         }
 
         async function loadModelTextures(model, frameIndex) {
