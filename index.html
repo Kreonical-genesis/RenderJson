@@ -312,6 +312,35 @@
         .model-item:hover .model-preview img {
             transform: scale(3);
         }
+        
+        #model-tooltip {
+            position: fixed;
+            display: none;
+            z-index: 1000;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+            pointer-events: none;
+        }
+        #model-tooltip.visible {
+            display: block;
+        }
+        #model-tooltip canvas {
+            display: block;
+            border-radius: 4px;
+        }
+        #model-tooltip .tooltip-name {
+            font-size: 0.75rem;
+            color: var(--text-main);
+            margin-top: 8px;
+            text-align: center;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
         .model-preview.loading {
             display: flex;
             align-items: center;
@@ -471,7 +500,7 @@
                     </div>
                     <div class="form-group" style="margin-top: 5px;">
                         <label>Разрешение (px)</label>
-                        <input type="number" id="setting-size" value="800" min="100" max="2048">
+                        <input type="number" id="setting-size" value="500" min="100" max="2048">
                     </div>
                     <div class="form-group" style="margin-top: 5px;">
                         <label>Скачивание</label>
@@ -567,6 +596,11 @@
                     <div class="log-entry normal"><span class="time"></span>Система готова. Перетащите ZIP ресурспак...</div>
                 </div>
             </div>
+            
+            <div id="model-tooltip">
+                <canvas id="tooltip-canvas" width="200" height="200"></canvas>
+                <div class="tooltip-name"></div>
+            </div>
         </section>
     </main>
 
@@ -585,8 +619,8 @@
         };
         
         let RENDER_MODE = "png";
-        let PREVIEW_SIZE = 100;
-        let CANVAS_SIZE = 800;
+        let PREVIEW_SIZE = 500;
+        let CANVAS_SIZE = 500;
         let DOWNLOAD_MODE = "zip";
         let modelsToRender = [];
 
@@ -621,6 +655,145 @@
         fileInput.addEventListener('change', (e) => {
             handleFiles(e.target.files);
         });
+
+        let tooltipScene, tooltipCamera, tooltipRenderer, tooltipMesh;
+        let currentTooltipModel = null;
+        let tooltipTimeout = null;
+
+        function initTooltipScene() {
+            if (tooltipRenderer) return;
+            
+            const canvas = document.getElementById('tooltip-canvas');
+            tooltipScene = new THREE.Scene();
+            
+            const aspect = 1;
+            const frustumSize = 10;
+            tooltipCamera = new THREE.OrthographicCamera(
+                -frustumSize * aspect / 2,
+                frustumSize * aspect / 2,
+                frustumSize / 2,
+                -frustumSize / 2,
+                0.1,
+                1000
+            );
+            
+            const distance = 20;
+            const angleY = 225 * Math.PI / 180;
+            const angleX = 30 * Math.PI / 180;
+            
+            tooltipCamera.position.set(
+                distance * Math.sin(angleY) * Math.cos(angleX),
+                distance * Math.sin(angleX),
+                distance * Math.cos(angleY)
+            );
+            tooltipCamera.lookAt(0, 0, 0);
+
+            tooltipRenderer = new THREE.WebGLRenderer({ 
+                canvas: canvas,
+                antialias: true, 
+                alpha: true, 
+                preserveDrawingBuffer: true
+            });
+            tooltipRenderer.setSize(200, 200);
+            tooltipRenderer.setClearColor(0x000000, 0);
+            
+            tooltipScene.add(new THREE.AmbientLight(0xffffff, 0.9));
+            const light = new THREE.DirectionalLight(0xffffff, 0.5);
+            light.position.set(5, 20, 5);
+            tooltipScene.add(light);
+        }
+
+        async function showModelTooltip(model, x, y) {
+            if (tooltipTimeout) clearTimeout(tooltipTimeout);
+            
+            const tooltip = document.getElementById('model-tooltip');
+            const nameEl = tooltip.querySelector('.tooltip-name');
+            
+            if (model.type === 'single') {
+                nameEl.textContent = model.name.replace('.json', '').split('/').pop();
+            } else {
+                nameEl.textContent = `Анимация (${model.frames.length} кадр.)`;
+            }
+            
+            const offset = 15;
+            let left = x + offset;
+            let top = y + offset;
+            
+            if (left + 220 > window.innerWidth) left = x - 220 - offset;
+            if (top + 250 > window.innerHeight) top = y - 250 - offset;
+            
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+            tooltip.classList.add('visible');
+            
+            currentTooltipModel = model.id;
+            
+            tooltipTimeout = setTimeout(async () => {
+                if (currentTooltipModel !== model.id) return;
+            
+                if (tooltipMesh) {
+                    tooltipScene.remove(tooltipMesh);
+                    tooltipMesh.traverse(obj => {
+                        if (obj.geometry) obj.geometry.dispose();
+                        if (obj.material) {
+                            if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                            else obj.material.dispose();
+                        }
+                    });
+                    tooltipMesh = null;
+                }
+                
+                initTooltipScene();
+            
+            try {
+                let modelPath = model.type === 'single' ? model.path : model.frames[0];
+                const modelData = await loadModelWithParentsFromZip(modelPath);
+                
+                let newMesh;
+                if (modelData.parent === "item/generated" || !modelData.elements) {
+                    newMesh = await createGeneratedModel(modelData, 0);
+                } else {
+                    newMesh = await createGeometryFromModel(modelData, 0);
+                }
+                
+                tooltipMesh = newMesh;
+                tooltipScene.add(tooltipMesh);
+                
+                const box = new THREE.Box3().setFromObject(tooltipMesh);
+                const size = box.getSize(new THREE.Vector3());
+                const center = box.getCenter(new THREE.Vector3());
+                
+                tooltipMesh.position.x -= center.x;
+                tooltipMesh.position.y -= center.y;
+                tooltipMesh.position.z -= center.z;
+                
+                const maxDim = Math.max(size.x, size.y, size.z);
+                tooltipCamera.zoom = (2 / (maxDim || 1)) * 2.7;
+                tooltipCamera.updateProjectionMatrix();
+                
+                tooltipRenderer.render(tooltipScene, tooltipCamera);
+            } catch (e) {
+                console.error('Tooltip error:', e);
+            }
+            }, 100);
+        }
+
+        function hideModelTooltip() {
+            document.getElementById('model-tooltip').classList.remove('visible');
+            if (tooltipTimeout) clearTimeout(tooltipTimeout);
+            currentTooltipModel = null;
+            if (tooltipMesh) {
+                tooltipScene.remove(tooltipMesh);
+                tooltipMesh.traverse(obj => {
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) {
+                        if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                        else obj.material.dispose();
+                    }
+                });
+                tooltipMesh = null;
+            }
+        }
 
         function initCameraControls() {
             document.getElementById('cam-pos-x').value = cameraSettings.posX;
@@ -1005,6 +1178,23 @@
                     label.classList.toggle('selected', selectedModels.has(m.id));
                     updateSelectedCount();
                 };
+                label.onmouseenter = (e) => {
+                    showModelTooltip(m, e.clientX, e.clientY);
+                };
+                label.onmouseleave = () => {
+                    hideModelTooltip();
+                };
+                label.onmousemove = (e) => {
+                    const tooltip = document.getElementById('model-tooltip');
+                    if (tooltip.classList.contains('visible')) {
+                        let left = e.clientX + 15;
+                        let top = e.clientY + 15;
+                        if (left + 220 > window.innerWidth) left = e.clientX - 220 - 15;
+                        if (top + 250 > window.innerHeight) top = e.clientY - 250 - 15;
+                        tooltip.style.left = left + 'px';
+                        tooltip.style.top = top + 'px';
+                    }
+                };
                 
                 const cb = document.createElement('input');
                 cb.type = 'checkbox';
@@ -1091,7 +1281,7 @@
         function initPreviewScene() {
             if (window.previewRenderer) return;
             
-            const PREVIEW_SIZE = 100;
+            const PREVIEW_SIZE = 500;
             
             window.previewScene = new THREE.Scene();
             
@@ -1252,7 +1442,7 @@
 
             const maxDim = Math.max(size.x, size.y, size.z);
             const cam = isPreview ? window.previewCamera : camera;
-            cam.zoom = (2 / (maxDim || 1)) * 0.8; 
+            cam.zoom = isPreview ? (2 / (maxDim || 1)) * 1.7 : (2 / (maxDim || 1)) * 0.8;
             cam.updateProjectionMatrix();
         }
 
