@@ -301,6 +301,121 @@
         .btn:hover { background: var(--bg-panel); }
         .btn-small { padding: 2px 8px; font-size: 0.7rem; }
 
+        .toolbar-btn {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px 10px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .toolbar-btn:hover { background: var(--bg-panel); }
+
+        .toolbar-dropdown .toolbar-menu {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: 0;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            margin-bottom: 4px;
+            overflow: hidden;
+            z-index: 1000;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
+        }
+        .toolbar-dropdown:hover .toolbar-menu {
+            display: block;
+        }
+        .toolbar-menu-item {
+            padding: 8px 10px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-main);
+        }
+        .toolbar-menu-item:hover {
+            background: var(--accent);
+        }
+
+        /* Floating toolbar */
+        .floating-toolbar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 100;
+        }
+        
+        .floating-dropdown {
+            position: relative;
+        }
+        
+        .floating-btn {
+            width: 40px;
+            height: 40px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            color: var(--text-main);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        
+        .floating-btn:hover {
+            background: var(--accent);
+            transform: scale(1.05);
+        }
+        
+        .floating-dropdown:hover .floating-btn {
+            background: var(--accent);
+        }
+        
+        .floating-panel {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 100%;
+            margin-left: 8px;
+            margin-top: 8px;
+            width: 260px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+        
+        .floating-dropdown .floating-panel {
+            pointer-events: none;
+        }
+        
+        .floating-dropdown:hover .floating-panel,
+        .floating-dropdown.active .floating-panel {
+            display: block;
+            animation: fadeIn 0.15s ease;
+            pointer-events: auto;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .model-list-container {
             flex: 1;
             overflow-y: auto;
@@ -602,49 +717,91 @@
 
         <section class="render-workspace">
             <div id="render-section">
-                <div id="camera-panel" style="border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;">
-                    <div class="panel-header" style="background: rgba(0,0,0,0.3); display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: none;">
-                        <span style="font-size: 0.7rem;">КАМЕРА</span>
-                        <button id="btn-preview-camera" class="btn btn-small" style="padding: 2px 8px; font-size: 0.65rem;">Применить</button>
+                <!-- Компактные кнопки справа сверху -->
+                <div class="floating-toolbar">
+                    <!-- Кнопка Камера -->
+                    <div class="floating-dropdown">
+                        <button class="floating-btn" title="Камера">
+                            📷
+                        </button>
+                        <div class="floating-panel">
+                            <div class="panel-header" style="background: rgba(0,0,0,0.3); display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: none;">
+                                <span style="font-size: 0.7rem;">КАМЕРА</span>
+                            </div>
+                            <div class="panel-content" style="padding: 10px; gap: 8px;">
+                                <div class="camera-controls" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;">
+                                    <div class="form-group">
+                                        <label style="font-size: 0.7rem;">X: <span id="cam-pos-x-val">0</span></label>
+                                        <input type="range" id="cam-pos-x" min="-100" max="100" value="0" step="1" style="padding: 0;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-size: 0.7rem;">Y: <span id="cam-pos-y-val">30</span></label>
+                                        <input type="range" id="cam-pos-y" min="-100" max="100" value="30" step="1" style="padding: 0;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-size: 0.7rem;">Z: <span id="cam-pos-z-val">30</span></label>
+                                        <input type="range" id="cam-pos-z" min="-100" max="100" value="30" step="1" style="padding: 0;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-size: 0.7rem;">Zoom: <span id="cam-zoom-val">1.0</span></label>
+                                        <input type="range" id="cam-zoom" min="0.1" max="3" value="1" step="0.1" style="padding: 0;">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label style="font-size: 0.7rem;">Пресет</label>
+                                    <select id="camera-preset-select" style="padding: 6px; font-size: 0.75rem;">
+                                        <option value="">-- Пресет --</option>
+                                        <option value="default">Default</option>
+                                        <option value="isometric">Isometric</option>
+                                        <option value="top-down">Top Down</option>
+                                        <option value="front">Front</option>
+                                        <option value="side">Side</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <select id="camera-model-select" style="padding: 6px; font-size: 0.75rem;">
+                                        <option value="">-- Модель --</option>
+                                    </select>
+                                </div>
+                                <button id="btn-render-preview" class="btn" style="padding: 6px; font-size: 0.75rem;">Превью</button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="panel-content" style="padding: 10px; gap: 8px;">
-                        <div class="camera-controls" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;">
-                            <div class="form-group">
-                                <label style="font-size: 0.7rem;">X: <span id="cam-pos-x-val">0</span></label>
-                                <input type="range" id="cam-pos-x" min="-100" max="100" value="0" step="1" style="padding: 0;">
+                    
+                    <!-- Кнопка Звук -->
+                    <div class="floating-dropdown">
+                        <button class="floating-btn" id="sound-btn" title="Звук">
+                            <span id="sound-icon">🔔</span>
+                        </button>
+                        <div class="floating-panel">
+                            <div class="panel-header" style="background: rgba(0,0,0,0.3); padding: 8px 10px; border-bottom: none;">
+                                <span style="font-size: 0.7rem;">ЗВУК</span>
                             </div>
-                            <div class="form-group">
-                                <label style="font-size: 0.7rem;">Y: <span id="cam-pos-y-val">30</span></label>
-                                <input type="range" id="cam-pos-y" min="-100" max="100" value="30" step="1" style="padding: 0;">
-                            </div>
-                            <div class="form-group">
-                                <label style="font-size: 0.7rem;">Z: <span id="cam-pos-z-val">30</span></label>
-                                <input type="range" id="cam-pos-z" min="-100" max="100" value="30" step="1" style="padding: 0;">
-                            </div>
-                            <div class="form-group">
-                                <label style="font-size: 0.7rem;">Zoom: <span id="cam-zoom-val">1.0</span></label>
-                                <input type="range" id="cam-zoom" min="0.1" max="3" value="1" step="0.1" style="padding: 0;">
+                            <div class="panel-content" style="padding: 10px;">
+                                <div class="toolbar-menu-item" onclick="soundNotifier.toggle()" style="justify-content: center; padding: 10px;">
+                                    <span id="sound-icon-menu" style="font-size: 1.2rem;">🔔</span>
+                                    <span>Звук: <strong id="sound-status">ВКЛ</strong></span>
+                                </div>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label style="font-size: 0.7rem;">Пресет</label>
-                            <select id="camera-preset-select" style="padding: 6px; font-size: 0.75rem;" title="1-5 - быстрый выбор пресета">
-                                <option value="">-- Пресет --</option>
-                                <option value="default">Default (0, 30, 30)</option>
-                                <option value="isometric">Isometric (30, 30, 30)</option>
-                                <option value="top-down">Top Down (0, 50, 0)</option>
-                                <option value="front">Front (0, 15, 50)</option>
-                                <option value="side">Side (50, 15, 0)</option>
-                            </select>
+                    </div>
+                    
+                    <!-- Кнопка Статистика -->
+                    <div class="floating-dropdown">
+                        <button class="floating-btn" title="Статистика">
+                            📊
+                        </button>
+                        <div class="floating-panel" style="width: 280px;">
+                            <div class="panel-header" style="background: rgba(0,0,0,0.3); padding: 8px 10px; border-bottom: none;">
+                                <span style="font-size: 0.7rem;">СТАТИСТИКА</span>
+                            </div>
+                            <div class="panel-content" id="stats-panel-content" style="padding: 10px;">
+                                <!-- Stats will be rendered here -->
+                            </div>
                         </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <select id="camera-model-select" style="padding: 6px; font-size: 0.75rem;">
-                                <option value="">-- Модель --</option>
-                            </select>
-                        </div>
-                        <button id="btn-render-preview" class="btn" style="padding: 6px; font-size: 0.75rem;">Превью<span class="hotkey-hint">Пробел</span></button>
                     </div>
                 </div>
+                
                 <div id="canvas-wrapper">
                     <div id="canvas-container"></div>
                 </div>
@@ -2235,6 +2392,8 @@
             
             modelsToRender = availableModels.filter(m => selectedModels.has(m.id));
 
+            usageStats.recordRenderStart(modelsToRender.length);
+
             document.getElementById('step-1-2').classList.add('disabled-panel');
             document.getElementById('step-3').classList.add('disabled-panel');
 
@@ -2264,6 +2423,8 @@
             if (typeof soundNotifier !== 'undefined') {
                 soundNotifier.playComplete();
             }
+
+            usageStats.recordRenderComplete(RENDER_MODE, modelsToRender);
         }
 
         // ===== SOUND NOTIFIER =====
@@ -2336,11 +2497,220 @@
             toggle() {
                 this.enabled = !this.enabled;
                 localStorage.setItem('sound-notifications', this.enabled);
+                
+                const soundIcon = document.getElementById('sound-icon');
+                const soundIconMenu = document.getElementById('sound-icon-menu');
+                const soundStatus = document.getElementById('sound-status');
+                
+                if (soundIcon) soundIcon.textContent = this.enabled ? '🔔' : '🔕';
+                if (soundIconMenu) soundIconMenu.textContent = this.enabled ? '🔔' : '🔕';
+                if (soundStatus) soundStatus.textContent = this.enabled ? 'ВКЛ' : 'ВЫКЛ';
+                
                 return this.enabled;
             }
         }
 
         const soundNotifier = new SoundNotifier();
+        window.soundNotifier = soundNotifier;
+
+        // ===== USAGE STATS =====
+        class UsageStats {
+            constructor() {
+                this.stats = this.loadStats();
+                this.sessionStart = Date.now();
+                this.renderStartTime = null;
+            }
+            
+            loadStats() {
+                const saved = localStorage.getItem('renderjson-stats');
+                return saved ? JSON.parse(saved) : {
+                    totalRenders: 0,
+                    totalModelsRendered: 0,
+                    totalRenderTime: 0,
+                    pngRenders: 0,
+                    gifRenders: 0,
+                    modelsRendered: {},
+                    firstUse: Date.now(),
+                    lastUse: Date.now(),
+                    dailyStats: {}
+                };
+            }
+            
+            saveStats() {
+                localStorage.setItem('renderjson-stats', JSON.stringify(this.stats));
+            }
+            
+            recordRenderStart(count) {
+                this.renderStartTime = Date.now();
+                this.stats.lastUse = Date.now();
+                
+                const today = new Date().toDateString();
+                if (!this.stats.dailyStats[today]) {
+                    this.stats.dailyStats[today] = { renders: 0, models: 0 };
+                }
+            }
+            
+            recordRenderComplete(mode, models) {
+                if (!this.renderStartTime) return;
+                
+                const duration = Date.now() - this.renderStartTime;
+                
+                this.stats.totalRenders++;
+                this.stats.totalModelsRendered += models.length;
+                this.stats.totalRenderTime += duration;
+                
+                if (mode === 'png') this.stats.pngRenders++;
+                else this.stats.gifRenders++;
+                
+                models.forEach(model => {
+                    const path = model.path || model.name || model.id;
+                    this.stats.modelsRendered[path] = (this.stats.modelsRendered[path] || 0) + 1;
+                });
+                
+                const today = new Date().toDateString();
+                this.stats.dailyStats[today].renders++;
+                this.stats.dailyStats[today].models += models.length;
+                
+                this.saveStats();
+            }
+            
+            getStats() {
+                const now = Date.now();
+                const totalDays = Math.max(1, Math.ceil((now - this.stats.firstUse) / (1000 * 60 * 60 * 24)));
+                
+                return {
+                    totalRenders: this.stats.totalRenders,
+                    totalModels: this.stats.totalModelsRendered,
+                    avgModelsPerRender: this.stats.totalRenders > 0 ? (this.stats.totalModelsRendered / this.stats.totalRenders).toFixed(1) : 0,
+                    avgTimePerRender: this.stats.totalRenders > 0 ? (this.stats.totalRenderTime / this.stats.totalRenders / 1000).toFixed(1) + 's' : '0s',
+                    pngPercentage: this.stats.totalRenders > 0 ? ((this.stats.pngRenders / this.stats.totalRenders) * 100).toFixed(0) + '%' : '0%',
+                    gifPercentage: this.stats.totalRenders > 0 ? ((this.stats.gifRenders / this.stats.totalRenders) * 100).toFixed(0) + '%' : '0%',
+                    rendersPerDay: (this.stats.totalRenders / totalDays).toFixed(1),
+                    mostRenderedModel: this.getMostRenderedModel(),
+                    sessionTime: Math.floor((now - this.sessionStart) / 1000 / 60) + ' мин'
+                };
+            }
+            
+            getMostRenderedModel() {
+                let maxCount = 0;
+                let maxPath = '';
+                for (const [path, count] of Object.entries(this.stats.modelsRendered)) {
+                    if (count > maxCount) {
+                        maxCount = count;
+                        maxPath = path;
+                    }
+                }
+                return { path: maxPath, count: maxCount };
+            }
+        }
+
+        const usageStats = new UsageStats();
+
+        function showStatsModal() {
+            const stats = usageStats.getStats();
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: var(--bg-panel);
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                padding: 20px;
+                z-index: 10000;
+                max-width: 450px;
+                width: 90%;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            `;
+            
+            modal.innerHTML = `
+                <h3 style="margin-bottom:15px; color:var(--accent);">📊 Статистика использования</h3>
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:4px;">
+                        <div style="color:var(--text-dim); font-size:0.7rem;">ВСЕГО РЕНДЕРОВ</div>
+                        <div style="font-size:1.8rem; font-weight:bold;">${stats.totalRenders}</div>
+                    </div>
+                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:4px;">
+                        <div style="color:var(--text-dim); font-size:0.7rem;">МОДЕЛЕЙ</div>
+                        <div style="font-size:1.8rem; font-weight:bold;">${stats.totalModels}</div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom:15px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:0.8rem;">
+                        <span>PNG / GIF</span>
+                        <span>${stats.pngPercentage} / ${stats.gifPercentage}</span>
+                    </div>
+                    <div style="height:8px; background:rgba(0,0,0,0.3); border-radius:4px; overflow:hidden;">
+                        <div style="height:100%; width:${stats.pngPercentage}; background:var(--accent); float:left;"></div>
+                        <div style="height:100%; width:${stats.gifPercentage}; background:#d97706; float:left;"></div>
+                    </div>
+                </div>
+                
+                <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                    <tr><td style="padding:5px 0; color:var(--text-dim);">Среднее моделей/рендер:</td><td style="text-align:right;">${stats.avgModelsPerRender}</td></tr>
+                    <tr><td style="padding:5px 0; color:var(--text-dim);">Среднее время:</td><td style="text-align:right;">${stats.avgTimePerRender}</td></tr>
+                    <tr><td style="padding:5px 0; color:var(--text-dim);">Рендеров в день:</td><td style="text-align:right;">${stats.rendersPerDay}</td></tr>
+                    <tr><td style="padding:5px 0; color:var(--text-dim);">Самая рендеренная:</td><td style="text-align:right;">${stats.mostRenderedModel.path ? stats.mostRenderedModel.path.split('/').pop() : '-'} (${stats.mostRenderedModel.count})</td></tr>
+                    <tr><td style="padding:5px 0; color:var(--text-dim);">Время в сессии:</td><td style="text-align:right;">${stats.sessionTime}</td></tr>
+                </table>
+                
+                <div style="margin-top:20px; text-align:right;">
+                    <button onclick="this.closest('[style*=&quot;position: fixed&quot;]').remove()" style="background:var(--bg-input);">Закрыть</button>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+
+        window.showStatsModal = showStatsModal;
+
+        function renderStatsPanel() {
+            const stats = usageStats.getStats();
+            const container = document.getElementById('stats-panel-content');
+            if (!container) return;
+            
+            container.innerHTML = `
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+                    <div style="background:rgba(0,0,0,0.2); padding:8px; border-radius:4px; text-align:center;">
+                        <div style="color:var(--text-dim); font-size:0.6rem;">РЕНДЕРОВ</div>
+                        <div style="font-size:1.4rem; font-weight:bold;">${stats.totalRenders}</div>
+                    </div>
+                    <div style="background:rgba(0,0,0,0.2); padding:8px; border-radius:4px; text-align:center;">
+                        <div style="color:var(--text-dim); font-size:0.6rem;">МОДЕЛЕЙ</div>
+                        <div style="font-size:1.4rem; font-weight:bold;">${stats.totalModels}</div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:3px; font-size:0.7rem; color:var(--text-dim);">
+                        <span>PNG / GIF</span>
+                        <span>${stats.pngPercentage} / ${stats.gifPercentage}</span>
+                    </div>
+                    <div style="height:6px; background:rgba(0,0,0,0.3); border-radius:3px; overflow:hidden;">
+                        <div style="height:100%; width:${stats.pngPercentage}; background:var(--accent); float:left;"></div>
+                        <div style="height:100%; width:${stats.gifPercentage}; background:#d97706; float:left;"></div>
+                    </div>
+                </div>
+                
+                <table style="width:100%; border-collapse:collapse; font-size:0.7rem; color:var(--text-dim);">
+                    <tr><td style="padding:3px 0;">Среднее моделей:</td><td style="text-align:right; color:var(--text-main);">${stats.avgModelsPerRender}</td></tr>
+                    <tr><td style="padding:3px 0;">Среднее время:</td><td style="text-align:right; color:var(--text-main);">${stats.avgTimePerRender}</td></tr>
+                    <tr><td style="padding:3px 0;">В день:</td><td style="text-align:right; color:var(--text-main);">${stats.rendersPerDay}</td></tr>
+                    <tr><td style="padding:3px 0;">Сессия:</td><td style="text-align:right; color:var(--text-main);">${stats.sessionTime}</td></tr>
+                </table>
+                
+                ${stats.mostRenderedModel.path ? `
+                <div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--border-color);">
+                    <div style="font-size:0.65rem; color:var(--text-dim);">Часто рендерили:</div>
+                    <div style="font-size:0.75rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${stats.mostRenderedModel.path.split('/').pop()}</div>
+                </div>
+                ` : ''}
+            `;
+        }
 
         // ===== KEYBOARD SHORTCUTS =====
         class KeyboardShortcuts {
@@ -2350,6 +2720,7 @@
                     'ctrl+a': () => toggleAllModels(true),
                     'ctrl+d': () => toggleAllModels(false),
                     'ctrl+f': () => document.getElementById('model-search')?.focus(),
+                    'ctrl+i': () => showStatsModal(),
                     'escape': () => this.closeModals(),
                     '1': () => this.selectPreset('default'),
                     '2': () => this.selectPreset('isometric'),
@@ -2439,28 +2810,26 @@
 
         // ===== UI: Sound toggle =====
         function addSoundToggleButton() {
-            const header = document.querySelector('header');
-            if (!header) return;
-
-            const btn = document.createElement('button');
-            btn.id = 'sound-toggle-btn';
-            btn.innerHTML = soundNotifier.enabled ? '🔔' : '🔕';
-            btn.style.cssText = 'background: transparent; border: 1px solid var(--border-color); padding: 6px 10px; font-size: 14px;';
-            btn.title = 'Звуковые уведомления';
-
-            btn.addEventListener('click', () => {
-                const enabled = soundNotifier.toggle();
-                btn.innerHTML = enabled ? '🔔' : '🔕';
-            });
-
-            header.appendChild(btn);
+            const soundIcon = document.getElementById('sound-icon');
+            const soundIconMenu = document.getElementById('sound-icon-menu');
+            const soundStatus = document.getElementById('sound-status');
+            
+            if (soundIcon) {
+                soundIcon.textContent = soundNotifier.enabled ? '🔔' : '🔕';
+            }
+            if (soundIconMenu) {
+                soundIconMenu.textContent = soundNotifier.enabled ? '🔔' : '🔕';
+            }
+            if (soundStatus) {
+                soundStatus.textContent = soundNotifier.enabled ? 'ВКЛ' : 'ВЫКЛ';
+            }
         }
 
         // ===== UI: Shortcuts hint =====
         function addShortcutsHint() {
             const hint = document.createElement('div');
             hint.id = 'shortcuts-hint';
-            hint.innerHTML = '⌨️ Ctrl+R: рендер | Пробел: превью | 1-5: пресеты | P/G: формат';
+            hint.innerHTML = '⌨️ Ctrl+R: рендер | Ctrl+I: статистика | Пробел: превью | 1-5: пресеты';
             hint.style.cssText = `
                 position: fixed; bottom: 10px; right: 10px;
                 background: rgba(0,0,0,0.8); padding: 6px 12px;
@@ -2476,6 +2845,24 @@
         document.addEventListener('DOMContentLoaded', () => {
             addSoundToggleButton();
             addShortcutsHint();
+            
+            // Floating dropdown hover fix
+            document.querySelectorAll('.floating-dropdown').forEach(dropdown => {
+                let timeout;
+                dropdown.addEventListener('mouseenter', () => {
+                    clearTimeout(timeout);
+                    dropdown.classList.add('active');
+                    // Render stats when stats dropdown is hovered
+                    if (dropdown.querySelector('#stats-panel-content')) {
+                        renderStatsPanel();
+                    }
+                });
+                dropdown.addEventListener('mouseleave', () => {
+                    timeout = setTimeout(() => {
+                        dropdown.classList.remove('active');
+                    }, 150);
+                });
+            });
         });
     </script>
 </body>
