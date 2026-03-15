@@ -747,16 +747,20 @@
                                         <input type="range" id="cam-zoom" min="0.1" max="3" value="1" step="0.1" style="padding: 0;">
                                     </div>
                                 </div>
+                                 
                                 <div class="form-group">
                                     <label style="font-size: 0.7rem;">Пресет</label>
-                                    <select id="camera-preset-select" style="padding: 6px; font-size: 0.75rem;">
-                                        <option value="">-- Пресет --</option>
-                                        <option value="default">Default</option>
-                                        <option value="isometric">Isometric</option>
-                                        <option value="top-down">Top Down</option>
-                                        <option value="front">Front</option>
-                                        <option value="side">Side</option>
-                                    </select>
+                                    <div style="display: flex; gap: 4px;">
+                                        <select id="camera-preset-select" style="flex: 1; padding: 6px; font-size: 0.75rem;">
+                                            <option value="">-- Пресет --</option>
+                                            <option value="default">Default</option>
+                                            <option value="isometric">Isometric</option>
+                                            <option value="top-down">Top Down</option>
+                                            <option value="front">Front</option>
+                                            <option value="side">Side</option>
+                                        </select>
+                                        <button id="btn-save-preset" class="btn" style="padding: 4px 8px; font-size: 0.7rem;" title="Сохранить текущую позицию камеры как пресет">💾</button>
+                                    </div>
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0;">
                                     <select id="camera-model-select" style="padding: 6px; font-size: 0.75rem;">
@@ -1504,6 +1508,10 @@
             const topLight = new THREE.DirectionalLight(0xffffff, 0.5);
             topLight.position.set(5, 20, 5);
             scene.add(topLight);
+            
+            // Create rotation wrapper for model positioning
+            rotationWrapper = new THREE.Group();
+            scene.add(rotationWrapper);
         }
 
         function initPreviewScene() {
@@ -2765,13 +2773,18 @@
             }
 
             selectPreset(name) {
-                const presets = {
+                const defaultPresets = {
                     'default': { x: 0, y: 30, z: 30, zoom: 1 },
                     'isometric': { x: 30, y: 30, z: 30, zoom: 1.2 },
                     'top-down': { x: 0, y: 50, z: 0, zoom: 1.5 },
                     'front': { x: 0, y: 15, z: 50, zoom: 1 },
                     'side': { x: 50, y: 15, z: 0, zoom: 1 }
                 };
+                
+                // Check custom presets first
+                const customPresets = getCustomPresets();
+                const presets = { ...defaultPresets, ...customPresets };
+                
                 const p = presets[name];
                 if (!p) return;
 
@@ -2807,6 +2820,82 @@
         }
 
         const shortcuts = new KeyboardShortcuts();
+
+        // ===== CUSTOM CAMERA PRESETS =====
+        const CUSTOM_PRESETS_KEY = 'renderjson-custom-presets';
+        
+        function getCustomPresets() {
+            const saved = localStorage.getItem(CUSTOM_PRESETS_KEY);
+            return saved ? JSON.parse(saved) : {};
+        }
+        
+        function saveCustomPresets(presets) {
+            localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(presets));
+        }
+        
+        function updatePresetSelect() {
+            const select = document.getElementById('camera-preset-select');
+            if (!select) return;
+            
+            const customPresets = getCustomPresets();
+            const defaultPresets = ['default', 'isometric', 'top-down', 'front', 'side'];
+            
+            Array.from(select.options).forEach(opt => {
+                if (!defaultPresets.includes(opt.value) && opt.value !== '') {
+                    opt.remove();
+                }
+            });
+            
+            Object.keys(customPresets).forEach(name => {
+                if (!select.querySelector(`option[value="${name}"]`)) {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = '★ ' + name;
+                    select.appendChild(opt);
+                }
+            });
+        }
+        
+        document.getElementById('btn-save-preset')?.addEventListener('click', () => {
+            const name = prompt('Введите название пресета:');
+            if (!name || !name.trim()) return;
+            
+            const presetName = name.trim().toLowerCase().replace(/\s+/g, '_');
+            
+            const customPresets = getCustomPresets();
+            customPresets[presetName] = {
+                x: cameraSettings.posX,
+                y: cameraSettings.posY,
+                z: cameraSettings.posZ,
+                zoom: cameraSettings.zoom
+            };
+            
+            saveCustomPresets(customPresets);
+            updatePresetSelect();
+            document.getElementById('camera-preset-select').value = presetName;
+            
+            log(`Пресет "${presetName}" сохранён`, 'success');
+        });
+        
+        document.getElementById('camera-preset-select')?.addEventListener('contextmenu', (e) => {
+            const select = e.target;
+            const value = select.value;
+            if (!value) return;
+            
+            const defaultPresets = ['default', 'isometric', 'top-down', 'front', 'side'];
+            if (defaultPresets.includes(value)) return;
+            
+            e.preventDefault();
+            
+            if (confirm(`Удалить пресет "${value}"?`)) {
+                const customPresets = getCustomPresets();
+                delete customPresets[value];
+                saveCustomPresets(customPresets);
+                updatePresetSelect();
+                select.value = '';
+                log(`Пресет "${value}" удалён`, 'normal');
+            }
+        });
 
         // ===== UI: Sound toggle =====
         function addSoundToggleButton() {
@@ -2845,6 +2934,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             addSoundToggleButton();
             addShortcutsHint();
+            updatePresetSelect();
             
             // Floating dropdown hover fix
             document.querySelectorAll('.floating-dropdown').forEach(dropdown => {
