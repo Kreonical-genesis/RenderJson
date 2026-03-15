@@ -54,6 +54,7 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
+            position: relative;
         }
         button:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
         button:disabled { background: #374151; color: #9ca3af; cursor: not-allowed; transform: none; }
@@ -118,6 +119,38 @@
         .mode-badge.setup { background-color: #4b5563; }
         .mode-badge.gif { background-color: #d97706; }
         .mode-badge.png { background-color: var(--accent); }
+
+        /* Tooltip for hotkey hints */
+        .hotkey-hint {
+            position: absolute;
+            background: rgba(0,0,0,0.9);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            white-space: nowrap;
+            z-index: 9999;
+            transform: translateX(-50%);
+            left: 50%;
+            bottom: 100%;
+            margin-bottom: 5px;
+        }
+        .hotkey-hint::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 4px solid transparent;
+            border-top-color: rgba(0,0,0,0.9);
+        }
+        button:hover > .hotkey-hint,
+        .btn:hover > .hotkey-hint {
+            opacity: 1;
+        }
 
         #status-area {
             display: flex;
@@ -251,11 +284,23 @@
         .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
         .list-header span { font-size: 0.85rem; color: var(--text-dim); }
         .list-actions { display: flex; gap: 4px; }
-        .list-actions button { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); padding: 4px 8px; font-size: 0.75rem; border-radius: 4px; }
+        .list-actions button { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); padding: 4px 8px; font-size: 0.75rem; border-radius: 4px; position: relative; }
         .list-actions button:hover { background: var(--bg-input); }
         .list-actions .btn-link { color: #60a5fa; border-color: #3b82f6; }
         .list-actions .btn-link:hover { background: rgba(59, 130, 246, 0.1); }
-        
+
+        .btn {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px 12px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            position: relative;
+        }
+        .btn:hover { background: var(--bg-panel); }
+        .btn-small { padding: 2px 8px; font-size: 0.7rem; }
+
         .model-list-container {
             flex: 1;
             overflow-y: auto;
@@ -463,7 +508,7 @@
         <div id="status-area">
             <div class="status-info">
                 <div id="status-text" style="color: var(--text-main); font-weight: normal; font-size: 0.95rem;">Готов к работе</div>
-                <div id="eta-text">Drag & Drop ZIP для загрузки</div>
+                <div id="eta-text">Drag & Drop ZIP/JAR для загрузки</div>
             </div>
             <div id="progress-track"><div id="progress-bar"></div></div>
         </div>
@@ -483,9 +528,9 @@
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                         </svg>
-                        <p><span class="highlight">Drag & Drop</span> ZIP файлы</p>
+                        <p><span class="highlight">Drag & Drop</span> ZIP / JAR файлы</p>
                         <p style="font-size: 0.75rem; margin-top: 5px;">или нажмите для выбора</p>
-                        <input type="file" id="file-input" accept=".zip" multiple>
+                        <input type="file" id="file-input" accept=".zip,.jar" multiple>
                     </div>
                     
                     <div id="loaded-packs"></div>
@@ -497,7 +542,7 @@
                 <div class="panel-content">
                     <div class="form-group">
                         <label>Режим</label>
-                        <select id="setting-mode">
+                        <select id="setting-mode" title="P - PNG, G - GIF">
                             <option value="png">PNG (Только первый кадр)</option>
                             <option value="gif">GIF (Вращение / Анимация)</option>
                         </select>
@@ -537,8 +582,8 @@
                 <div class="list-header" style="margin-top: 15px; margin-bottom: 0;">
                     <span>Объекты:</span>
                     <div class="list-actions">
-                        <button onclick="toggleAllModels(true)">Все</button>
-                        <button onclick="toggleAllModels(false)">Сброс</button>
+                        <button onclick="toggleAllModels(true)">Все<span class="hotkey-hint">Ctrl+A</span></button>
+                        <button onclick="toggleAllModels(false)">Сброс<span class="hotkey-hint">Ctrl+D</span></button>
                         <button class="btn-link" onclick="manualGroupSelected()" title="Объединить выбранные модели в одну покадровую анимацию">Связать</button>
                     </div>
                 </div>
@@ -548,8 +593,8 @@
             </div>
             
             <div style="padding: 15px; border-top: 1px solid var(--border-color); background: var(--bg-panel); display: flex; justify-content: center;">
-                <button id="btn-start" class="disabled-panel" onclick="startBatchProcess()" style="background: var(--success); padding: 12px 0; width: 100%; font-size: 1.05rem;">
-                    Начать Рендер
+                <button id="btn-start" class="disabled-panel" onclick="startBatchProcess()" style="background: var(--success); padding: 12px 0; width: 100%; font-size: 1.05rem; position: relative;">
+                    Начать Рендер<span class="hotkey-hint">Ctrl+R</span>
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                 </button>
             </div>
@@ -581,12 +626,23 @@
                                 <input type="range" id="cam-zoom" min="0.1" max="3" value="1" step="0.1" style="padding: 0;">
                             </div>
                         </div>
+                        <div class="form-group">
+                            <label style="font-size: 0.7rem;">Пресет</label>
+                            <select id="camera-preset-select" style="padding: 6px; font-size: 0.75rem;" title="1-5 - быстрый выбор пресета">
+                                <option value="">-- Пресет --</option>
+                                <option value="default">Default (0, 30, 30)</option>
+                                <option value="isometric">Isometric (30, 30, 30)</option>
+                                <option value="top-down">Top Down (0, 50, 0)</option>
+                                <option value="front">Front (0, 15, 50)</option>
+                                <option value="side">Side (50, 15, 0)</option>
+                            </select>
+                        </div>
                         <div class="form-group" style="margin-bottom: 0;">
                             <select id="camera-model-select" style="padding: 6px; font-size: 0.75rem;">
                                 <option value="">-- Модель --</option>
                             </select>
                         </div>
-                        <button id="btn-render-preview" class="btn" style="padding: 6px; font-size: 0.75rem;">Превью</button>
+                        <button id="btn-render-preview" class="btn" style="padding: 6px; font-size: 0.75rem;">Превью<span class="hotkey-hint">Пробел</span></button>
                     </div>
                 </div>
                 <div id="canvas-wrapper">
@@ -623,6 +679,7 @@
         };
         
         let RENDER_MODE = "png";
+        let isSettingPreset = false;
         let PREVIEW_SIZE = 500;
         let CANVAS_SIZE = 500;
         let DOWNLOAD_MODE = "zip";
@@ -814,6 +871,9 @@
                 const el = document.getElementById(id);
                 if (el) {
                     el.addEventListener('input', (e) => {
+                        // Пропускаем если меняем пресет
+                        if (isSettingPreset) return;
+                        
                         let value = parseFloat(e.target.value);
                         
                         if (id === 'cam-pos-x') cameraSettings.posX = value;
@@ -824,6 +884,9 @@
                         const valEl = document.getElementById(id + '-val');
                         if (valEl) valEl.textContent = value;
                         
+                        // Сбрасываем выбор пресета
+                        document.getElementById('camera-preset-select').value = '';
+                        
                         updateCameraFromSettings();
                     });
                 }
@@ -831,6 +894,10 @@
             
             document.getElementById('btn-render-preview')?.addEventListener('click', renderCameraPreview);
             document.getElementById('btn-preview-camera')?.addEventListener('click', applyCameraToSelected);
+            
+            document.getElementById('camera-preset-select')?.addEventListener('change', (e) => {
+                shortcuts.selectPreset(e.target.value);
+            });
         }
 
         function updateCameraFromSettings() {
@@ -940,10 +1007,10 @@
         }
 
         async function handleFiles(files) {
-            const zipFiles = Array.from(files).filter(f => f.name.endsWith('.zip'));
+            const zipFiles = Array.from(files).filter(f => f.name.endsWith('.zip') || f.name.endsWith('.jar'));
             
             if (zipFiles.length === 0) {
-                alert('Пожалуйста, выберите ZIP файлы');
+                alert('Пожалуйста, выберите ZIP или JAR файлы');
                 return;
             }
 
@@ -2193,7 +2260,223 @@
             
             document.getElementById('step-1-2').classList.remove('disabled-panel');
             document.getElementById('step-3').classList.remove('disabled-panel');
+
+            if (typeof soundNotifier !== 'undefined') {
+                soundNotifier.playComplete();
+            }
         }
+
+        // ===== SOUND NOTIFIER =====
+        class SoundNotifier {
+            constructor() {
+                this.enabled = localStorage.getItem('sound-notifications') === 'true';
+                this.audioContext = null;
+                this.initAudio();
+            }
+
+            initAudio() {
+                try {
+                    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.audioContext = new AudioContext();
+                } catch (e) {
+                    console.warn('Web Audio API not supported');
+                }
+            }
+
+            playComplete() {
+                if (!this.enabled || !this.audioContext) return;
+
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume();
+                }
+
+                const now = this.audioContext.currentTime;
+                const osc = this.audioContext.createOscillator();
+                const gain = this.audioContext.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, now);
+                osc.frequency.setValueAtTime(1320, now + 0.15);
+
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.3, now + 0.02);
+                gain.gain.linearRampToValueAtTime(0, now + 0.5);
+
+                osc.connect(gain);
+                gain.connect(this.audioContext.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.5);
+            }
+
+            playError() {
+                if (!this.enabled || !this.audioContext) return;
+
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume();
+                }
+
+                const now = this.audioContext.currentTime;
+                const osc = this.audioContext.createOscillator();
+                const gain = this.audioContext.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(440, now);
+
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+
+                osc.connect(gain);
+                gain.connect(this.audioContext.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.3);
+            }
+
+            toggle() {
+                this.enabled = !this.enabled;
+                localStorage.setItem('sound-notifications', this.enabled);
+                return this.enabled;
+            }
+        }
+
+        const soundNotifier = new SoundNotifier();
+
+        // ===== KEYBOARD SHORTCUTS =====
+        class KeyboardShortcuts {
+            constructor() {
+                this.handlers = {
+                    'ctrl+r': () => document.getElementById('btn-start')?.click(),
+                    'ctrl+a': () => toggleAllModels(true),
+                    'ctrl+d': () => toggleAllModels(false),
+                    'ctrl+f': () => document.getElementById('model-search')?.focus(),
+                    'escape': () => this.closeModals(),
+                    '1': () => this.selectPreset('default'),
+                    '2': () => this.selectPreset('isometric'),
+                    '3': () => this.selectPreset('top-down'),
+                    '4': () => this.selectPreset('front'),
+                    '5': () => this.selectPreset('side'),
+                    'p': () => { document.getElementById('setting-mode').value = 'png'; },
+                    'g': () => { document.getElementById('setting-mode').value = 'gif'; },
+                    ' ': (e) => { e.preventDefault(); this.togglePreview(); }
+                };
+                this.init();
+            }
+
+            init() {
+                document.addEventListener('keydown', (e) => {
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+                    let key = '';
+                    if (e.ctrlKey) key += 'ctrl+';
+                    if (e.altKey) key += 'alt+';
+                    if (e.shiftKey) key += 'shift+';
+                    key += e.key.toLowerCase();
+
+                    const handler = this.handlers[key];
+                    if (handler) {
+                        e.preventDefault();
+                        handler(e);
+                    }
+                });
+            }
+
+            togglePreview() {
+                const btn = document.getElementById('btn-render-preview');
+                if (btn) btn.click();
+                else if (typeof applyCameraToSelected === 'function') applyCameraToSelected();
+            }
+
+            closeModals() {
+                document.querySelectorAll('[style*="position: fixed"]').forEach(el => {
+                    if (el.id !== 'shortcuts-hint') el.remove();
+                });
+            }
+
+            selectPreset(name) {
+                const presets = {
+                    'default': { x: 0, y: 30, z: 30, zoom: 1 },
+                    'isometric': { x: 30, y: 30, z: 30, zoom: 1.2 },
+                    'top-down': { x: 0, y: 50, z: 0, zoom: 1.5 },
+                    'front': { x: 0, y: 15, z: 50, zoom: 1 },
+                    'side': { x: 50, y: 15, z: 0, zoom: 1 }
+                };
+                const p = presets[name];
+                if (!p) return;
+
+                // Блокируем обновление камеры во время установки пресета
+                isSettingPreset = true;
+                
+                document.getElementById('cam-pos-x').value = p.x;
+                document.getElementById('cam-pos-x-val').textContent = p.x;
+                document.getElementById('cam-pos-y').value = p.y;
+                document.getElementById('cam-pos-y-val').textContent = p.y;
+                document.getElementById('cam-pos-z').value = p.z;
+                document.getElementById('cam-pos-z-val').textContent = p.z;
+                document.getElementById('cam-zoom').value = p.zoom;
+                document.getElementById('cam-zoom-val').textContent = p.zoom;
+                document.getElementById('camera-preset-select').value = name;
+
+                // Обновляем настройки камеры
+                cameraSettings.posX = p.x;
+                cameraSettings.posY = p.y;
+                cameraSettings.posZ = p.z;
+                cameraSettings.zoom = p.zoom;
+                
+                updateCameraFromSettings();
+                
+                // Снимаем блокировку и рендерим превью
+                isSettingPreset = false;
+                
+                const modelSelect = document.getElementById('camera-model-select');
+                if (modelSelect && modelSelect.value) {
+                    setTimeout(() => renderCameraPreview(), 50);
+                }
+            }
+        }
+
+        const shortcuts = new KeyboardShortcuts();
+
+        // ===== UI: Sound toggle =====
+        function addSoundToggleButton() {
+            const header = document.querySelector('header');
+            if (!header) return;
+
+            const btn = document.createElement('button');
+            btn.id = 'sound-toggle-btn';
+            btn.innerHTML = soundNotifier.enabled ? '🔔' : '🔕';
+            btn.style.cssText = 'background: transparent; border: 1px solid var(--border-color); padding: 6px 10px; font-size: 14px;';
+            btn.title = 'Звуковые уведомления';
+
+            btn.addEventListener('click', () => {
+                const enabled = soundNotifier.toggle();
+                btn.innerHTML = enabled ? '🔔' : '🔕';
+            });
+
+            header.appendChild(btn);
+        }
+
+        // ===== UI: Shortcuts hint =====
+        function addShortcutsHint() {
+            const hint = document.createElement('div');
+            hint.id = 'shortcuts-hint';
+            hint.innerHTML = '⌨️ Ctrl+R: рендер | Пробел: превью | 1-5: пресеты | P/G: формат';
+            hint.style.cssText = `
+                position: fixed; bottom: 10px; right: 10px;
+                background: rgba(0,0,0,0.8); padding: 6px 12px;
+                border-radius: 20px; font-size: 0.7rem; color: var(--text-dim);
+                z-index: 1000; opacity: 0.7; transition: opacity 0.3s;
+            `;
+            hint.addEventListener('mouseenter', () => hint.style.opacity = '1');
+            hint.addEventListener('mouseleave', () => hint.style.opacity = '0.7');
+            document.body.appendChild(hint);
+        }
+
+        // Init UI on load
+        document.addEventListener('DOMContentLoaded', () => {
+            addSoundToggleButton();
+            addShortcutsHint();
+        });
     </script>
 </body>
 </html>
